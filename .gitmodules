@@ -1,3 +1,6 @@
 [submodule "matlab/lib/LIDCToolbox"]
 	path = matlab/lib/LIDCToolbox
 	url = https://github.com/yulkang/LIDCToolbox.git
+[submodule "python/pydicom"]
+	path = python/pydicom
+	url = https://github.com/darcymason/pydicom.git
