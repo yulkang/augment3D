@@ -10,27 +10,26 @@ Created on Sat Oct 15 16:22:52 2016
 @author: yulkang
 """
 
-#%% Tutorial - import
+#%% Import
 import SimpleITK as sitk
 import numpy as np
 import csv
 import os
 from PIL import Image
 import matplotlib.pyplot as plt
-import tifffile as tif
 from scipy.stats import cumfreq
 import pandas as pd
 
-#%%
+#%% Define functions
 def load_itk_image(filename):
     if not os.path.isfile(filename):
         return None, None, None
     
     itkimage = sitk.ReadImage(filename)
-    numpyImage = sitk.GetArrayFromImage(itkimage)
-    numpyOrigin = np.array(list(reversed(itkimage.GetOrigin())))
-    numpySpacing = np.array(list(reversed(itkimage.GetSpacing())))
-    return numpyImage, numpyOrigin, numpySpacing
+    img_np = sitk.GetArrayFromImage(itkimage)
+    origin_mm = np.array(list(reversed(itkimage.GetOrigin())))
+    spacing_mm = np.array(list(reversed(itkimage.GetSpacing())))
+    return img_np, origin_mm, spacing_mm
     
 def readCSV(filename):
     lines = []
@@ -40,10 +39,10 @@ def readCSV(filename):
             lines.append(line)
     return lines
     
-def worldToVoxelCoord(worldCoord, origin, spacing):
-    stretchedVoxelCoord = np.absolute(worldCoord - origin)
-    voxelCoord = stretchedVoxelCoord / spacing
-    return voxelCoord
+#def worldToVoxelCoord(worldCoord, origin, spacing):
+#    stretchedVoxelCoord = np.absolute(worldCoord - origin)
+#    voxelCoord = stretchedVoxelCoord / spacing
+#    return voxelCoord
     
 def normalizePlanes(npzarray):
     maxHU = 400.
@@ -60,7 +59,8 @@ uid_file = 'Data/LUNA/uid.csv'
 meta_file='Data/LUNA/img_meta.csv'
 
 # an example uid that is in subset0
-uid = '1.3.6.1.4.1.14519.5.2.1.6279.6001.231645134739451754302647733304'
+uid = '1.3.6.1.4.1.14519.5.2.1.6279.6001.213140617640021803112060161074'
+#uid = '1.3.6.1.4.1.14519.5.2.1.6279.6001.231645134739451754302647733304'
 
 #%% load candidates
 cands = readCSV(cand_file)
@@ -69,20 +69,20 @@ cands = readCSV(cand_file)
 uid0 = list()
 for cand in cands[1:]:
     uid0.append(cand[0])
-uids = list(set(uid0))
+uids0 = list(set(uid0))
 
-#%% Example
+#%% uid2meta - example
 def uid2mhd_file(uid):
     return os.path.join(img_dir, uid + '.mhd')
 
 img_file = uid2mhd_file(uid)
-numpyImage, numpyOrigin, numpySpacing = load_itk_image(img_file)
-list(numpyImage.shape)
-list(numpyOrigin)
-list(numpySpacing)
+img_np, origin_mm, spacing_mm = load_itk_image(img_file)
+print(img_np.shape)
+print(origin_mm)
+print(spacing_mm)
 
 #%% Export metadata (shape, origin, spacing)
-def uid2meta(uids=uids):
+def uid2meta(uids=uids0):
     with open(meta_file, 'wb') as csvfile:
         csvwriter = csv.writer(csvfile, delimiter=',')
         csvwriter.writerow(['uid', 
@@ -92,72 +92,113 @@ def uid2meta(uids=uids):
         
         for uid in uids:
             img_file = uid2mhd_file(uid)
-            numpyImage, numpyOrigin, numpySpacing = load_itk_image(img_file)
-            if numpyImage is None:
+            img_np, origin_mm, spacing_mm = load_itk_image(img_file)
+            if img_np is None:
                 continue
             else:
-                row = [uid] + list(numpyImage.shape)
-                            + list(numpyOrigin)
-                            + list(numpySpacing)
+                row = [uid] + list(img_np.shape) \
+                            + list(origin_mm) \
+                            + list(spacing_mm)
                 print(row)
                 csvwriter.writerow(row)
             
-#%% Export
-uid2meta(uids)
+#%% Export uid2meta
+uid2meta(uids0)
              
-#%% Examine spacing0
+#%% Functions to export patches after interpolation
+spacing_output_mm = np.array([2.5, 0.5, 0.5])
+size_output_mm = np.array([32.5, 32.5, 32.5])
+size_output_vox = size_output_mm / spacing_output_mm
+delta_grid_mm = np.mgrid[-size_output_vox[0]/2:size_output_vox[0]/2,
+                 -size_output_vox[1]/2:size_output_vox[1]/2,
+                 -size_output_vox[2]/2:size_output_vox[2]/2]
+delta_grid_mm = np.reshape(delta_grid_mm, (3,-1))
 
-   
-#%% Export patches
+#%%
 def uid2patch(uid):
     img_file = os.path.join(img_dir, uid + '.mhd')
     if not os.path.isfile(img_file):
         return 0
     
-    numpyImage, numpyOrigin, numpySpacing = load_itk_image(img_file)
+    img_np, origin_mm, spacing_mm = load_itk_image(img_file)
     print('Loaded ' + img_file)
     
     for cand in cands[1:]:
         if cand[0] == uid:
-            cand2patch(cand, numpyImage, numpyOrigin, numpySpacing)
+            cand2patch(cand, img_np, origin_mm, spacing_mm)
+            break # DEBUG
     
     return 1
 
-def cand2patch(cand, numpyImage, numpyOrigin, numpySpacing):
-    worldCoord = np.asarray([float(cand[3]),float(cand[2]),float(cand[1])])
-    voxelCoord = worldToVoxelCoord(worldCoord, numpyOrigin, numpySpacing)
-    voxelWidth = 65
-    voxelDepth = 2
+def cand2patch(cand, img_np, origin_mm, spacing_mm):
+    from scipy.interpolate import interpn
+    from pysy import zipPickle
     
-    if (voxelCoord[1] - voxelWidth/2 < 0)  \
-            or (voxelCoord[1] + voxelWidth/2> numpyImage.shape[2]) \
-            or (voxelCoord[2] - voxelWidth/2 < 0) \
-            or (voxelCoord[2] + voxelWidth/2 > numpyImage.shape[2]) \
-            or (voxelCoord[0] < voxelDepth + 1) \
-            or (voxelCoord[0] + voxelDepth > numpyImage.shape[0]):
-        return
+    uid = cand[0]
+    cand_mm = np.reshape(
+        np.asarray([float(cand[3]),float(cand[2]),float(cand[1])]),
+        (3,1))
     
-    patch = numpyImage[
-        voxelCoord[0],
-        voxelCoord[1]-voxelWidth/2:voxelCoord[1]+voxelWidth/2,
-        voxelCoord[2]-voxelWidth/2:voxelCoord[2]+voxelWidth/2]
+    grid0_mm = range(3)
+    for dim in range(3):
+        grid0_mm[dim] = np.arange(img_np.shape[dim]) \
+                * spacing_mm[dim] \
+                + origin_mm[dim]
+
+    grid_mm = np.transpose(delta_grid_mm + cand_mm)
+    
+    print(cand)
+#    print(grid0_mm)
+#    print(grid_mm.shape)
+#    print(grid_mm)
+    
+    patch = interpn(grid0_mm, img_np, grid_mm, 
+                    bounds_error=False,
+                    fill_value=0)
+    patch = np.reshape(patch, size_output_vox)
     patch = normalizePlanes(patch)
-    print 'data'
-    print worldCoord
-    print voxelCoord
-    print patch
+    
+    print origin_mm
+    print patch.shape
+    print np.min(patch)
+    print np.max(patch)
+    
     outputDir = 'Data/patches/'
-    plt.imshow(patch, cmap='gray')
+    mid_slice_vox = patch.shape[0]/2;
+    
+    plt.imshow(patch[0,:,:], cmap='gray')
+    plt.show()
+    
+    plt.imshow(patch[mid_slice_vox-1,:,:], cmap='gray')
+    plt.show()
+    
+    plt.imshow(patch[mid_slice_vox,:,:], cmap='gray')
+    plt.show()
+    
+    plt.imshow(patch[mid_slice_vox+1,:,:], cmap='gray')
+    plt.show()
+    
+    plt.imshow(patch[-1,:,:], cmap='gray')
     plt.show()
     
     pth = os.path.join(
             outputDir, 
-            'patch_' + str(worldCoord[0]) 
-            + '_' + str(worldCoord[1]) 
-            + '_' + str(worldCoord[2]) + 
-            '.tiff')
-    Image.fromarray(patch*255).convert('L').save(pth)
+            'patch_' + uid
+            + '_' + str(origin_mm[0]) 
+            + '_' + str(origin_mm[1]) 
+            + '_' + str(origin_mm[2])
+            + '.zpkl')
+    
+    zipPickle.save({'img':patch*255, 
+                    'cand_mm':cand_mm, 
+                    'origin_mm':origin_mm,
+                    'spacing_mm':spacing_mm},
+                   pth)
+    print('Saved to %s' % pth)
 
+#%% Convert - demo
+uid2patch(uid)
+    
 #%% Convert candidates to patches
 for uid in uids:
     uid2patch(uid)
