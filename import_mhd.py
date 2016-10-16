@@ -1,6 +1,10 @@
 #!/usr/bin/env python2
 # -*- coding: utf-8 -*-
 """
+Mostly follows SimpleITKTutorial.ipynb
+but loads corresponding file for each cand,
+and fill with 0 if the nodule is too close to the boundary.
+
 Created on Sat Oct 15 16:22:52 2016
 
 @author: yulkang
@@ -13,9 +17,15 @@ import csv
 import os
 from PIL import Image
 import matplotlib.pyplot as plt
+import tifffile as tif
+from scipy.stats import cumfreq
+import pandas as pd
 
 #%%
 def load_itk_image(filename):
+    if not os.path.isfile(filename):
+        return None, None, None
+    
     itkimage = sitk.ReadImage(filename)
     numpyImage = sitk.GetArrayFromImage(itkimage)
     numpyOrigin = np.array(list(reversed(itkimage.GetOrigin())))
@@ -44,42 +54,88 @@ def normalizePlanes(npzarray):
     return npzarray
     
 #%% Set path
-img_path  = 'Data/LUNA/image/1.3.6.1.4.1.14519.5.2.1.6279.6001.231645134739451754302647733304.mhd'
-cand_path = 'Data/LUNA/candidates.csv'
+cand_file = 'Data/LUNA/candidates.csv'
+img_dir = 'Data/LUNA/image'
+uid_file = 'Data/LUNA/uid.csv'
+meta_file='Data/LUNA/img_meta.csv'
 
-        
-
-#%% load image
-numpyImage, numpyOrigin, numpySpacing = load_itk_image(img_path) 
-print numpyImage.shape
-print numpyOrigin
-print numpySpacing
+# an example uid that is in subset0
+uid = '1.3.6.1.4.1.14519.5.2.1.6279.6001.231645134739451754302647733304'
 
 #%% load candidates
-cands = readCSV(cand_path)
-print cands
+cands = readCSV(cand_file)
 
-#%% get candidates
+#%% Get unique uids
+uid0 = list()
 for cand in cands[1:]:
+    uid0.append(cand[0])
+uids = list(set(uid0))
+
+#%% Example
+def uid2mhd_file(uid):
+    return os.path.join(img_dir, uid + '.mhd')
+
+img_file = uid2mhd_file(uid)
+numpyImage, numpyOrigin, numpySpacing = load_itk_image(img_file)
+list(numpyImage.shape)
+list(numpyOrigin)
+list(numpySpacing)
+
+#%% Export metadata (shape, origin, spacing)
+def uid2meta(uids=uids):
+    with open(meta_file, 'wb') as csvfile:
+        csvwriter = csv.writer(csvfile, delimiter=',')
+        csvwriter.writerow(['uid', 
+                            'shape0', 'shape1', 'shape2',
+                            'origin0', 'origin1', 'origin2',
+                            'spacing0', 'spacing1', 'spacing2'])
+        
+        for uid in uids:
+            img_file = uid2mhd_file(uid)
+            numpyImage, numpyOrigin, numpySpacing = load_itk_image(img_file)
+            if numpyImage is None:
+                continue
+            else:
+                row = [uid] + list(numpyImage.shape)
+                            + list(numpyOrigin)
+                            + list(numpySpacing)
+                print(row)
+                csvwriter.writerow(row)
+            
+#%% Export
+uid2meta(uids)
+             
+#%% Examine spacing0
+
+   
+#%% Export patches
+def uid2patch(uid):
+    img_file = os.path.join(img_dir, uid + '.mhd')
+    if not os.path.isfile(img_file):
+        return 0
+    
+    numpyImage, numpyOrigin, numpySpacing = load_itk_image(img_file)
+    print('Loaded ' + img_file)
+    
+    for cand in cands[1:]:
+        if cand[0] == uid:
+            cand2patch(cand, numpyImage, numpyOrigin, numpySpacing)
+    
+    return 1
+
+def cand2patch(cand, numpyImage, numpyOrigin, numpySpacing):
     worldCoord = np.asarray([float(cand[3]),float(cand[2]),float(cand[1])])
     voxelCoord = worldToVoxelCoord(worldCoord, numpyOrigin, numpySpacing)
     voxelWidth = 65
+    voxelDepth = 2
     
-#%% Convert to patches
-for cand in cands[1:]:
-    #%% Load corresponding image
-    uid = cand[0]
-    
-    
-    worldCoord = np.asarray([float(cand[3]),float(cand[2]),float(cand[1])])
-    voxelCoord = worldToVoxelCoord(worldCoord, numpyOrigin, numpySpacing)
-    voxelWidth = 65
-    
-    if (voxelCoord[1] < voxelWidth/2)  \
-            or (voxelCoord[1] > numpyImage.shape[2]-voxelWidth/2) \
-            or (voxelCoord[2] < voxelWidth/2) \
-            or (voxelCoord[2] > numpyImage.shape[2]-voxelWidth/2):
-        continue
+    if (voxelCoord[1] - voxelWidth/2 < 0)  \
+            or (voxelCoord[1] + voxelWidth/2> numpyImage.shape[2]) \
+            or (voxelCoord[2] - voxelWidth/2 < 0) \
+            or (voxelCoord[2] + voxelWidth/2 > numpyImage.shape[2]) \
+            or (voxelCoord[0] < voxelDepth + 1) \
+            or (voxelCoord[0] + voxelDepth > numpyImage.shape[0]):
+        return
     
     patch = numpyImage[
         voxelCoord[0],
@@ -101,3 +157,7 @@ for cand in cands[1:]:
             + '_' + str(worldCoord[2]) + 
             '.tiff')
     Image.fromarray(patch*255).convert('L').save(pth)
+
+#%% Convert candidates to patches
+for uid in uids:
+    uid2patch(uid)
