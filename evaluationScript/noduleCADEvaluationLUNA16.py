@@ -486,7 +486,12 @@ def collect(annotations_filename,annotations_excluded_filename,seriesuids_filena
     return (allNodules, seriesUIDs)
     
     
-def noduleCADEvaluation(annotations_filename,annotations_excluded_filename,seriesuids_filename,results_filename,outputDir):
+def noduleCADEvaluation(
+        annotations_filename          = 'evaluationScript/annotations/annotations.csv',
+        annotations_excluded_filename = 'evaluationScript/annotations/annotations_excluded.csv',
+        seriesuids_filename           = 'evaluationScript/annotations/seriesuids.csv',
+        results_filename              = 'evaluationScript/exampleFiles/submission/sampleSubmission.csv',
+        outputDir                     = 'evaluationScript/exampleFiles/evaluation'):
     '''
     function to load annotations and evaluate a CAD algorithm
     @param annotations_filename: list of annotations
@@ -513,6 +518,7 @@ if __name__ == '__main__':
     seriesuids_filename           = sys.argv[3]
     results_filename              = sys.argv[4]
     outputDir                     = sys.argv[5]
+
     # execute only if run as a script
     noduleCADEvaluation(annotations_filename,annotations_excluded_filename,seriesuids_filename,results_filename,outputDir)
     print "Finished!"
