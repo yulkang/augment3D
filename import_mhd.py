@@ -17,9 +17,11 @@ import csv
 import os
 from PIL import Image
 import matplotlib.pyplot as plt
-from scipy.stats import cumfreq
 import pandas as pd
 import warnings
+
+from pysy.stat import ecdf
+import compare_cand_vs_annot as annot
 
 #%% Define functions
 def load_itk_image(filename):
@@ -33,8 +35,8 @@ def load_itk_image(filename):
         spacing_mm = np.array(list(reversed(itkimage.GetSpacing())))
         return img_np, origin_mm, spacing_mm
     except RuntimeError as err:
-        warnings.warn('Error loading %s:', filename)
-        warnings.warn(err.strerror)
+        warnings.warn('Error loading %s:' % filename)
+        warnings.warn(err.message)
         return None, None, None
     
 def readCSV(filename):
@@ -67,17 +69,14 @@ meta_file = 'Data/LUNA/img_meta.csv'
 
 # an example uid that is in subset0
 uid = '1.3.6.1.4.1.14519.5.2.1.6279.6001.213140617640021803112060161074'
-#uid = '1.3.6.1.4.1.14519.5.2.1.6279.6001.231645134739451754302647733304'
 
 #%% load candidates
-cands = readCSV(cand_file)
-cands_pos = readCSV(annotation_file)
+cands = annot.cands
+cands_pos = annot.cands_pos
 
 #%% Get unique uids
-uid0 = list()
-for cand in cands[1:]:
-    uid0.append(cand[0])
-uids0 = list(set(uid0))
+uid0 = cands.seriesuid
+uids0 = cands.seriesuid.unique()
 
 #%% uid2meta - example
 def uid2mhd_file(uid):
@@ -91,30 +90,36 @@ def uid2mhd_file(uid):
 
 #%% Export metadata (shape, origin, spacing)
 def uid2meta(uids=uids0):
-    with open(meta_file, 'wb') as csvfile:
-        csvwriter = csv.writer(csvfile, delimiter=',')
-        csvwriter.writerow(['uid', 
-                            'shape0', 'shape1', 'shape2',
-                            'origin0', 'origin1', 'origin2',
-                            'spacing0', 'spacing1', 'spacing2'])
-        
-        for uid in uids:
-            img_file = uid2mhd_file(uid)
-            img_np, origin_mm, spacing_mm = load_itk_image(img_file)
-            if img_np is None:
-                continue
-            else:
-                row = [uid] + list(img_np.shape) \
-                            + list(origin_mm) \
-                            + list(spacing_mm)
-                print(row)
-                csvwriter.writerow(row)
+    tbl = pd.DataFrame(columns=['uid',
+                                'shape0', 'shape1', 'shape2',
+                                'origin0', 'origin1', 'origin2',
+                                'spacing0', 'spacing1', 'spacing2'])
+    tbl.uid = uids
+    print tbl.head()
+    
+    for i_row in range(len(tbl)):
+        uid = uids[i_row]
+        img_file = uid2mhd_file(uid)
+        img_np, origin_mm, spacing_mm = load_itk_image(img_file)
+        if img_np is None:
+            continue
+        else:
+            row = list(img_np.shape) \
+                + list(origin_mm) \
+                + list(spacing_mm)
+            print(row)
+            tbl.iloc[i_row,1:] = np.array(row)
+    
+    tbl = tbl[~pd.isnull(tbl.shape0)]
+    tbl.to_csv(meta_file, sep=',', index=False)
+    return tbl
             
 #%% Export uid2meta
 if os.path.isfile(meta_file):
-    print('meta_file exists. Skipping uid2meta: %s' % meta_file)
+    print('meta_file exists. Loading uid2meta from %s' % meta_file)
+    tbl = pd.read_csv(meta_file)
 else:
-    uid2meta(uids0)
+    tbl = uid2meta(uids0)
              
 #%% Functions to export patches after interpolation
 spacing_output_mm = np.array([0.5, 0.5, 0.5]) # ([5,5,5]) # 
@@ -142,7 +147,8 @@ def uid2patch(uid):
     
     return 1
 
-def cand2patch(cand, img_np=None, origin_mm=None, spacing_mm=None):
+def cand2patch(cand, img_np=None, origin_mm=None, spacing_mm=None,
+               is_annotation=True):
     from scipy.interpolate import interpn
     from pysy import zipPickle
     
@@ -160,6 +166,11 @@ def cand2patch(cand, img_np=None, origin_mm=None, spacing_mm=None):
         np.asarray([float(cand[3]),float(cand[2]),float(cand[1])]),
         (3,1)) # z, y, x; bottom->up, ant->post, right->left
     
+    if is_annotation:
+        diameter_mm = float(cand[4])
+    else:
+        
+                         
     grid0_mm = range(3)
     for dim in range(3):
         grid0_mm[dim] = np.arange(img_np.shape[dim]) \
@@ -214,7 +225,8 @@ def cand2patch(cand, img_np=None, origin_mm=None, spacing_mm=None):
     zipPickle.save({'img':patch*255, 
                     'cand_mm':cand_mm, 
                     'origin_mm':origin_mm,
-                    'spacing_mm':spacing_mm},
+                    'spacing_mm':spacing_mm,
+                    'diameter_mm':diameter_mm},
                    pth + '.zpkl')
     print('Saved to %s.zpkl' % pth)
     return 1
