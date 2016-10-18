@@ -52,23 +52,29 @@ def readCSV(filename):
 #    voxelCoord = stretchedVoxelCoord / spacing
 #    return voxelCoord
     
+#%% Normalization
 maxHU = 400.
 minHU = -1000.
+
 def normalizePlanes(npzarray):
     npzarray = (npzarray - minHU) / (maxHU - minHU)
     npzarray[npzarray>1] = 1.
     npzarray[npzarray<0] = 0.
     return npzarray
     
-#%% Set path
+#%% Paths
 cand_file = 'Data/LUNA/candidates.csv'
 annotation_file = 'Data/LUNA/annotations.csv'
-img_dir = 'Data/LUNA/image'
+
+img_dir = '/Volumes/YKWD3GB/YulKang/LUNA/all'
+#img_dir = 'Data/LUNA/image'
+
+subset_file = 'Data/LUNA/uid_subset.csv'
 uid_file = 'Data/LUNA/uid.csv'
 meta_file = 'Data/LUNA/img_meta.csv'
 
-# an example uid that is in subset0
-uid = '1.3.6.1.4.1.14519.5.2.1.6279.6001.213140617640021803112060161074'
+## an example uid that is in subset0
+#uid0 = '1.3.6.1.4.1.14519.5.2.1.6279.6001.213140617640021803112060161074'
 
 #%% load candidates
 cands = annot.cands
@@ -82,11 +88,12 @@ uids0 = cands.seriesuid.unique()
 def uid2mhd_file(uid):
     return os.path.join(img_dir, uid + '.mhd')
 
-#img_file = uid2mhd_file(uid)
-#img_np, origin_mm, spacing_mm = load_itk_image(img_file)
-#print(img_np.shape)
-#print(origin_mm)
-#print(spacing_mm)
+#%%
+img_file = uid2mhd_file(uid0[0])
+img_np, origin_mm, spacing_mm = load_itk_image(img_file)
+print(img_np.shape)
+print(origin_mm)
+print(spacing_mm)
 
 #%% Export metadata (shape, origin, spacing)
 def uid2meta(uids=uids0):
@@ -114,15 +121,15 @@ def uid2meta(uids=uids0):
     tbl.to_csv(meta_file, sep=',', index=False)
     return tbl
             
-#%% Export uid2meta
+#%% Import uid2meta
 if os.path.isfile(meta_file):
     print('meta_file exists. Loading uid2meta from %s' % meta_file)
     tbl = pd.read_csv(meta_file)
 else:
     tbl = uid2meta(uids0)
-             
-#%% Functions to export patches after interpolation
-spacing_output_mm = np.array([0.5, 0.5, 0.5]) # ([5,5,5]) # 
+          
+#%% Exporting patches after interpolation
+spacing_output_mm = np.array([1, 0.5, 0.5]) # ([5,5,5]) # 
 size_output_mm = np.array([45, 45, 45]) # ([300,300,300]) # 
 size_output_vox = size_output_mm / spacing_output_mm
 delta_grid_mm = np.mgrid[
@@ -131,7 +138,6 @@ delta_grid_mm = np.mgrid[
         -size_output_mm[2]/2:size_output_mm[2]/2:spacing_output_mm[2]]
 delta_grid_mm = np.reshape(delta_grid_mm, (3,-1))
 
-#%%
 def uid2patch(uid):
     img_file = os.path.join(img_dir, uid + '.mhd')
     if not os.path.isfile(img_file):
@@ -140,10 +146,11 @@ def uid2patch(uid):
     img_np, origin_mm, spacing_mm = load_itk_image(img_file)
     print('Loaded ' + img_file)
     
-    for cand in cands[1:]:
-        if cand[0] == uid:
-            cand2patch(cand, img_np, origin_mm, spacing_mm)
-            break # DEBUG
+    row_incl = np.nonzero(cands.seriesuid == uid)[0]
+    
+    for i_row in row_incl:
+        cand2patch(cands.iloc[i_row], img_np, origin_mm, spacing_mm)
+        break # DEBUG
     
     return 1
 
@@ -153,7 +160,7 @@ def cand2patch(cand, img_np=None, origin_mm=None, spacing_mm=None,
     from pysy import zipPickle
     
     if img_np is None:
-        uid = cand[0]
+        uid = cand.seriesuid
         img_file = os.path.join(img_dir, uid + '.mhd')
         if not os.path.isfile(img_file):
             return 0
@@ -161,15 +168,17 @@ def cand2patch(cand, img_np=None, origin_mm=None, spacing_mm=None,
         img_np, origin_mm, spacing_mm = load_itk_image(img_file)
         print('Loaded ' + img_file)
     
-    uid = cand[0]
+    uid = cand.seriesuid
     cand_mm = np.reshape(
-        np.asarray([float(cand[3]),float(cand[2]),float(cand[1])]),
+        np.asarray([cand.coordZ,
+                    cand.coordY,
+                    cand.coordX]),
         (3,1)) # z, y, x; bottom->up, ant->post, right->left
     
-    if is_annotation:
-        diameter_mm = float(cand[4])
+    if 'diamter' in cand.index:
+        diameter_mm = float(cand.diamater)
     else:
-        
+        diameter_mm = -1
                          
     grid0_mm = range(3)
     for dim in range(3):
@@ -222,7 +231,7 @@ def cand2patch(cand, img_np=None, origin_mm=None, spacing_mm=None,
                cmap='gray')
     plt.show()
     
-    zipPickle.save({'img':patch*255, 
+    zipPickle.save({'img':np.uint16(patch*(2**16-1)), 
                     'cand_mm':cand_mm, 
                     'origin_mm':origin_mm,
                     'spacing_mm':spacing_mm,
@@ -231,6 +240,9 @@ def cand2patch(cand, img_np=None, origin_mm=None, spacing_mm=None,
     print('Saved to %s.zpkl' % pth)
     return 1
 
+#%% Convert - demo
+uid2patch(uid0[0])
+    
 #%% Convert - positive examples
 n_to_convert = 3
 for cand in cands_pos[1:]:
@@ -239,9 +251,6 @@ for cand in cands_pos[1:]:
         if n_to_convert == 0:
             break
 
-#%% Convert - demo
-uid2patch(uid)
-    
 #%% Convert candidates to patches
-for uid in uids:
-    uid2patch(uid)
+for uid1 in uids0[:3]:
+    uid2patch(uid1)
