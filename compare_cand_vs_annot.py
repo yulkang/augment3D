@@ -73,7 +73,7 @@ def match_cand(cand):
     return cand_ix, dist, radius
     
 #%%  
-def  subset2cand(cands1 = cands):
+def subset2cand(cands1 = cands):
     if np.any(cands1.columns.isin(['subset'])):
         return 0
         
