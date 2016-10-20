@@ -66,8 +66,10 @@ def normalizePlanes(npzarray):
 cand_file = 'Data/LUNA/candidates.csv'
 annotation_file = 'Data/LUNA/annotations.csv'
 
-img_dir = '/Volumes/YKWD3GB/YulKang/LUNA/all'
 #img_dir = 'Data/LUNA/image'
+img_dir = '/Volumes/YKWD3GB/YulKang/LUNA/all'
+#out_dir = 'Data/patches/'
+out_dir = '/Volumes/YKWD3GB/YulKang/LUNA/patches'
 
 subset_file = 'Data/LUNA/uid_subset.csv'
 uid_file = 'Data/LUNA/uid.csv'
@@ -204,7 +206,6 @@ def cand2patch(cand, img_np=None, origin_mm=None, spacing_mm=None,
     print np.min(patch)
     print np.max(patch)
     
-    out_dir = 'Data/patches/'
     pth = os.path.join(
             out_dir, 
             'patch_' + uid
