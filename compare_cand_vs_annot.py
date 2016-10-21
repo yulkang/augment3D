@@ -8,6 +8,7 @@ Created on Sun Oct 16 21:21:05 2016
 
 import pandas as pd
 import numpy as np
+import os
 
 cand_file = 'Data/LUNA/candidates.csv'
 annotation_file = 'Data/LUNA/annotations.csv'
@@ -19,67 +20,94 @@ cands = pd.read_csv(cand_file)
 cands_pos = pd.read_csv(annotation_file)
 uid_subset = pd.read_csv(uid_subset_file)
 
+uids = cands_pos.seriesuid.unique()
+
+if os.path.isfile(cand_out_file):
+    cands_vs_annot = pd.read_csv(cand_out_file)
+
+n_cand = len(cands)
+n_cand_pos = len(cands_pos)
+
+coords = np.transpose(np.array(cands.loc[:,['coordX','coordY','coordZ']]))
+coords_pos = np.transpose(np.array(cands_pos.loc[:,['coordX','coordY','coordZ']]))
+
 #%% Compare cands and cands_pos
 def main():
     changed_cands = False
-    changed_cands = changed_cands or \
-            match_cands(cands)
-
-    changed_cands = changed_cands or \
-            subset2cand(cands)
+    changed_cands = changed_cands or match_uids(uids)
+    changed_cands = changed_cands or subset2cand(cands)
             
     if changed_cands:
         cands.to_csv(cand_out_file, sep=',', index=False)
         print('Saved to %s' % cand_out_file)
         
 #%% 
-def match_cands(cands1=cands):
-    if np.all(pd.Series(['cand_ix','dist','radius']).isin(cands1.columns)):
-        return 0
-    
-    for row in range(len(cands1)):
-        cand_ix, dist, radius = match_cand(cands1.iloc[row])
+def match_uids(uids1):
+#    if np.all(pd.Series(['dist',
+#                         'radius',
+#                         'is_pos',
+#                         'ix_pos'
+#                         ]).isin(cands.columns)):
+#        return 0
         
-        cands1.loc[row, 'cand_ix'] = cand_ix
-        cands1.loc[row, 'dist'] = dist
-        cands1.loc[row, 'radius'] = radius
-        print(cands1.loc[row,:]) # DEBUG
-
-        if cands1.loc[row,'class'] != (dist <= radius):
-            print(cands1.loc[row,:])
-            raise ValueError('Discrepancy of class was found')
-    return 1
-
-def match_cand(cand):
-    same_uid = np.nonzero(cands_pos['seriesuid'] == cand['seriesuid'])[0]
-
-    if same_uid.size == 0:
-        cand_ix = np.nan
-        dist = np.nan
-        radius = np.nan
-    else:
-        cand_pos_same_uid = cands_pos.iloc[same_uid,:]
-    
-        d_coord = np.array(cand_pos_same_uid[['coordX', 'coordY', 'coordZ']]) \
-                - np.array(cand[['coordX', 'coordY', 'coordZ']])
-        dist = np.sum(d_coord ** 2, 1) ** 0.5
-        radius = np.array(cand_pos_same_uid['diameter_mm']) / 2
-        ix_min_dist = np.argmin(dist)
+    dist = np.nan + np.zeros(n_cand)
+    radius = np.nan + np.zeros(n_cand)
+    is_pos = np.zeros(n_cand)
+    ix_pos = np.nan + np.zeros(n_cand)
         
-        dist = dist[ix_min_dist]
-        cand_ix = same_uid[ix_min_dist]
-        radius = radius[ix_min_dist]
-    
-    return cand_ix, dist, radius
+    for uid1 in uids1:
+        in_cand = np.nonzero(cands.seriesuid == uid1)[0]
+        in_cand_pos = np.nonzero(cands_pos.seriesuid == uid1)[0]
+        
+        if not np.any(in_cand_pos):
+            return 0
+            
+#        print(uid1)
+#        print(len(in_cand_pos))
+#        print(coords_pos.shape)
+#        print(coords_pos[:,in_cand_pos].shape)
+        
+        d_coords = np.reshape(coords[:,in_cand], [3,-1,1]) \
+                 - np.reshape(coords_pos[:,in_cand_pos], [3,1,-1],
+                              order='F')
+                 
+#        print(d_coords.shape)
+                 
+        dist1 = np.sum(d_coords ** 2, 0) ** 0.5
+#        print(dist1.shape)
+        
+        radius1 = np.reshape(cands_pos.loc[in_cand_pos,'diameter_mm'] / 2, 
+                             [1,-1])
+        is_pos1 = dist1 <= radius1
+        
+        min_ix = np.argmin(dist1, 1)
+        min_dist = np.min(dist1, 1)
+        
+        dist[in_cand] = min_dist
+        radius[in_cand] = radius1
+        is_pos[in_cand] = np.any(is_pos1, 1)
+        ix_pos[in_cand] = in_cand_pos[min_ix]
+        
+    cands.loc[:,'dist'] = dist
+    cands.loc[:,'radius'] = radius
+    cands.loc[:,'is_pos'] = is_pos
+    cands.loc[:,'ix_pos'] = ix_pos
+        
+    return np.sum(is_pos)
     
 #%%  
 def subset2cand(cands1 = cands):
     if np.any(cands1.columns.isin(['subset'])):
         return 0
         
-    for row in range(len(cands1)):
-        same_uid = np.nonzero(cands1.loc[row,'seriesuid'] 
-                              == uid_subset['seriesuid'])
-        cands1.loc[row,'subset'] = uid_subset.loc[same_uid,'subset']
+    subsets1 = np.zeros(len(cands1))
+        
+    for subset1 in uid_subset.subset.unique():
+        in_subset1 = uid_subset.subset == subset1
+        uid_subset1 = uid_subset.ix[in_subset1,'seriesuid']
+        same_uid = np.nonzero(cands1.seriesuid.isin(uid_subset1))
+        subsets1[same_uid] = subset1
+
+    cands1.loc[:,'subsets1'] = subsets1
     return 1
     
