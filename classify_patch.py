@@ -18,8 +18,11 @@ from six.moves import range
 import pandas as pd
 import warnings
 import os
-from pysy import zipPickle
+from PIL import Image
+import matplotlib.pyplot as plt
+import time
 
+from pysy import zipPickle
 import compare_cand_vs_annot as annot
 import import_mhd as mhd
 
@@ -31,7 +34,13 @@ cands_neg = annot.cands_neg
 subset_incl_pos = np.arange(9)
 subset_incl_neg = np.array([0])
 
-cands_pos = cands_pos.ix[cands_pos.subset.isin(subset_incl_pos),:]
+scale_incl = 0
+fmt = mhd.output_formats.iloc[scale_incl,:]
+scale_incl_pos = (cands_pos.loc[:,'radius'] >= fmt['radius_min_incl']) \
+               & (cands_pos.loc[:,'radius'] < fmt['radius_max_incl'])
+
+cands_pos = cands_pos.ix[cands_pos.subset.isin(subset_incl_pos) \
+                         & scale_incl_pos,:]
 cands_neg = cands_neg.ix[cands_neg.subset.isin(subset_incl_neg),:]
 
 n_pos = len(cands_pos)
@@ -46,51 +55,70 @@ n_all = len(cands_all)
 
 #%% Load dataset
 def load_cand(cands, scale=0):
+    
+    t_st = time.time()
+    
     n_cand = len(cands)
     n_loaded = 0
-    ix_loaded = np.zeros((n_cand), dtype=int32)
+    print('Loading %d candidates' % n_cand)
+    
+    ix_loaded = np.zeros((n_cand), dtype=np.int32)
+    img_all = None
     
     for i_cand in range(n_cand):
-        cand = cands.loc[i_cand,:]
-        patch_file = mhd.cand_scale2patch_file(cand, scale, cand['is_pos'])
-        if os.path.is_file(patch_file):
-            L = zipPickle.load(patch_file)
+        cand = cands.iloc[i_cand,:]
+        patch_file, _, _ = mhd.cand_scale2patch_file(
+                cand, 
+                output_format=mhd.output_formats.iloc[0,:])
+        if os.path.isfile(patch_file + '.zpkl'):
+            L = zipPickle.load(patch_file + '.zpkl')
             n_loaded += 1
         else:
             continue
         
         if n_loaded == 1:
-            siz = np.concatenate(([n_cand], L.img.shape, [1]))
+            siz = np.concatenate(([n_cand], L['img'].shape))
             img_all = np.zeros(siz, dtype=np.float32)
-        
-        img_all[n_loaded,:,:,:,0] = np.reshape(L['img'], )
-        ix_loaded[n_loaded] = i_cand
+            siz1 = siz.copy()
+            siz1[0] = 1
+            print('Loading images of size:')
+            print(L['img'].shape)
             
-    img_all = img_all[:n_loaded,:,:,:,:]
-    ix_loaded = ix_loaded[:n_loaded]
-    ix_loaded = cands.index(ix_loaded)
-    label_all = cands.loc[ix_loaded,'is_pos']
+        try:
+            img_all[n_loaded-1,:,:,:] = np.reshape(L['img'], siz1)
+        except ValueError as err:
+            n_loaded -= 1
+            warnings.warn(err.message)
+            print('Potential shape discrepancy:')
+            print(L['img'].shape)
+            continue
+            
+        ix_loaded[n_loaded-1] = i_cand
+            
+    if img_all is not None:
+        img_all = img_all[:n_loaded,:,:,:]
+        ix_loaded = ix_loaded[:n_loaded]
+        ix_loaded = cands.index[ix_loaded]
+        label_all = cands.loc[ix_loaded,'is_pos']
+    else:
+        label_all = None
+        ix_loaded = None
+
+    t_el = time.time() - t_st
+    print('Time elapsed: %1.2f sec / %d img = %1.2f msec/img' % 
+          (t_el, img_all.shape[0], t_el / img_all.shape[0] * 1e3))
         
+    print('Last image loaded:')
+    print(np.int32(ix_loaded[-1])) # DEBUG    
+    patch1 = img_all[-1,img_all.shape[1]/2,:,:]
+    plt.imshow(patch1, cmap='gray')
+    plt.show()
+    
     return img_all, label_all, ix_loaded
 
-img_all, label_all, ix_loaded = load_cand(cands_all)
-    
-#%%
-pickle_file = 'Data/notMNIST.pickle'
+img_neg, label_neg, ix_loaded_neg = load_cand(cands_neg.iloc[:,:])
+img_pos, label_pos, ix_loaded_pos = load_cand(cands_pos.iloc[:,:])
 
-with open(pickle_file, 'rb') as f:
-  save = pickle.load(f)
-  train_dataset = save['train_dataset']
-  train_labels = save['train_labels']
-  valid_dataset = save['valid_dataset']
-  valid_labels = save['valid_labels']
-  test_dataset = save['test_dataset']
-  test_labels = save['test_labels']
-  del save  # hint to help gc free up memory
-  print('Training set', train_dataset.shape, train_labels.shape)
-  print('Validation set', valid_dataset.shape, valid_labels.shape)
-  print('Test set', test_dataset.shape, test_labels.shape)
-  
 #%%
 image_size = 28
 num_labels = 10
