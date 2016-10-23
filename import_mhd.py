@@ -140,7 +140,9 @@ else:
     tbl = uid2meta(uids0)
           
 #%% Functions to export patches after interpolation
-def uid2patch(uid, cands1, n_to_convert=None, **kwargs):
+def uid2patch(uid, cands1, 
+              n_to_convert=None, 
+              output_format=output_formats.iloc[0,:]):
     if (uid2patch.uid_prev is None) or \
             (uid != uid2patch.uid_prev):
         
@@ -171,25 +173,30 @@ def uid2patch(uid, cands1, n_to_convert=None, **kwargs):
     for i_row in row_incl:
         n_converted += cand2patch(cands1.iloc[i_row], 
                                   img_np, origin_mm, spacing_mm,
-                                  **kwargs)
+                                  output_format=output_format)
         if n_converted >= n_to_convert:
             break # DEBUG
     
     return n_converted
 uid2patch.uid_prev = None
 
-def cand_scale2patch_file(cand, scale=0, is_pos=False):
-    fmt = output_formats.loc[scale,:]
+def cand_scale2patch_file(cand, 
+                          output_format=output_formats.iloc[0,:]):
+    fmt = output_format
+    is_pos = cand['is_pos']
 
     if is_pos:
         max_radius = fmt.radius_max * (fmt.radius_out_per_in + 1)
     else:
         max_radius = fmt.radius_max * fmt.radius_out_per_in
             
+    diameter_mm = max_radius * 2
+    spacing_mm = fmt.spacing_output_mm
+        
     converted = cand2patch_file(cand, 
-                                diameter_mm = max_radius * 2,
-                                spacing_mm = fmt.spacing_output_mm)
-    return converted
+                                diameter_mm = diameter_mm,
+                                spacing_mm = spacing_mm)
+    return converted, diameter_mm, spacing_mm
     
 def cand2patch_file(cand, diameter_mm=8*2.5*2, spacing_mm=0.5):
     return os.path.join(
@@ -203,11 +210,12 @@ def cand2patch_file(cand, diameter_mm=8*2.5*2, spacing_mm=0.5):
     
 def cand2patch(cand, img_np=None, origin_mm=None, spacing_input_mm=None,
                is_annotation=True,
-               max_radius=8, 
-               spacing_output_mm=0.5,
-               radius_out_per_in=2,
-               radius_margin=8
-               ):
+               output_format=output_formats.iloc[0,:]):
+#               max_radius=8, 
+#               spacing_output_mm=0.5,
+#               radius_out_per_in=2,
+#               radius_margin=8
+#               ):
     from scipy.interpolate import interpn
     from pysy import zipPickle
     
@@ -217,16 +225,14 @@ def cand2patch(cand, img_np=None, origin_mm=None, spacing_input_mm=None,
                     cand.coordY,
                     cand.coordX]),
         (3,1)) # z, y, x; bottom->up, ant->post, right->left
-
-    spacing_output_mm = np.zeros(3) + spacing_output_mm
-    dia_output_mm = np.zeros(3) \
-            + (max_radius * radius_out_per_in + radius_margin) * 2
-    dia_output_vox = dia_output_mm / spacing_output_mm
-    
+                    
     uid = cand.seriesuid
-    pth = cand2patch_file(cand, 
-                          diameter_mm=dia_output_mm[0],
-                          spacing_mm=spacing_output_mm[0])
+    pth, dia_output_mm, spacing_output_mm = cand_scale2patch_file(
+            cand, output_format)
+    
+    spacing_output_mm = np.zeros(3) + spacing_output_mm
+    dia_output_mm = np.zeros(3) + dia_output_mm
+    dia_output_vox = dia_output_mm / spacing_output_mm
     
     if not os.path.isdir(patch_dir):
         os.mkdir(patch_dir)
@@ -366,13 +372,14 @@ if __name__ == '__main__':
         print('uid %d/%d' % (i_uid, n_uid))
 
         for ii in range(len(output_formats)):
-            fmt = output_formats.loc[ii,:]    
+            fmt = output_formats.iloc[ii,:]    
     
-            converted = uid2patch(uid1, cands_pos,
-                      max_radius = fmt.radius_max,
-                      spacing_output_mm = fmt.spacing_output_mm,
-                      radius_out_per_in = fmt.radius_out_per_in,
-                      radius_margin = fmt.radius_max)
+            converted = uid2patch(uid1, cands_pos, 
+                                  output_format=fmt)
+#                      max_radius = fmt.radius_max,
+#                      spacing_output_mm = fmt.spacing_output_mm,
+#                      radius_out_per_in = fmt.radius_out_per_in,
+#                      radius_margin = fmt.radius_max)
         
         n_uid_converted += (converted > 0)
         if n_uid_converted >= n_uid_to_convert:
@@ -396,17 +403,17 @@ if __name__ == '__main__':
             uid1 = uids_in_subset1[i_uid]
             print('uid %d/%d, subset %d' % (i_uid, n_uid, subset1))
             
-            
             for ii in range(len(output_formats)):
-                fmt = output_formats.loc[ii,:]
+                fmt = output_formats.iloc[ii,:]
     
                 converted = uid2patch(
-                         uid1, cands,
-                         max_radius = fmt.radius_max,
-                         spacing_output_mm = fmt.spacing_output_mm,
-                         radius_out_per_in = fmt.radius_out_per_in,
-                         radius_margin = 0,
-                         n_to_convert = np.inf)
+                         uid1, cands, 
+                         output_format=fmt)
+#                         max_radius = fmt.radius_max,
+#                         spacing_output_mm = fmt.spacing_output_mm,
+#                         radius_out_per_in = fmt.radius_out_per_in,
+#                         radius_margin = 0,
+#                         n_to_convert = np.inf)
                 
             n_uid_converted += (converted > 0)
             if n_uid_converted >= n_uid_to_convert:
