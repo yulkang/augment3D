@@ -30,8 +30,8 @@ def load_itk_image(filename):
         itkimage = sitk.ReadImage(filename)
         img_np = sitk.GetArrayFromImage(itkimage)
         origin_mm = np.array(list(reversed(itkimage.GetOrigin())))
-        spacing_mm = np.array(list(reversed(itkimage.GetSpacing())))
-        return img_np, origin_mm, spacing_mm
+        spacing_input_mm = np.array(list(reversed(itkimage.GetSpacing())))
+        return img_np, origin_mm, spacing_input_mm
     except RuntimeError as err:
         warnings.warn('Error loading %s:' % filename)
         warnings.warn(err.message)
@@ -67,9 +67,9 @@ cand_out_file = 'Data/LUNA/candidates_vs_annot.csv'
 uid_subset_file = 'Data/LUNA/uid_subset.csv'
 
 #img_dir = 'Data/LUNA/image'
-img_dir = '/Volumes/YK_SSD_1TB/YulKang/LUNA/all'
-#out_dir = 'Data/patches/'
-out_dir = '/Volumes/YK_SSD_1TB/YulKang/LUNA/patches'
+img_dir = '/Volumes/YK_SSD_1TB/LUNA/all'
+#patch_dir = 'Data/patches/'
+patch_dir = '/Volumes/YK_SSD_1TB/LUNA/patches'
 
 subset_file = 'Data/LUNA/uid_subset.csv'
 meta_file = 'Data/LUNA/img_meta.csv'
@@ -92,9 +92,9 @@ uids0 = cands.seriesuid.unique()
 def uid2mhd_file(uid):
     return os.path.join(img_dir, uid + '.mhd')
 
-#%%
+#%% Test load_itk_image
 img_file = uid2mhd_file(uid0[0])
-img_np, origin_mm, spacing_mm = load_itk_image(img_file)
+img_np, origin_mm, spacing_input_mm = load_itk_image(img_file)
 print(img_np.shape)
 print(origin_mm)
 print(spacing_mm)
@@ -106,7 +106,7 @@ def uid2meta(uids=uids0):
                                 'origin0', 'origin1', 'origin2',
                                 'spacing0', 'spacing1', 'spacing2'])
     tbl.uid = uids
-    print tbl.head()
+    print(tbl.head())
     
     for i_row in range(len(tbl)):
         uid = uids[i_row]
@@ -132,37 +132,67 @@ if os.path.isfile(meta_file):
 else:
     tbl = uid2meta(uids0)
           
-#%% Exporting patches after interpolation
-# max radius is 16.14mm
-radius_range = [[0, 4], [4, 8], [8, 17]]
+#%%
+def fun1(inp):
+    if fun1.static is None or \
+            inp == fun1.static:
+        print('static <- inp')
+        fun1.static = inp
+    else:
+        print(fun1.static)
+fun1.static = None
 
-spacing_output_mm = np.array([0.5, 0.5, 0.5]) # ([5,5,5]) # 
-size_output_mm = np.array([60, 60, 60]) # ([300,300,300]) # 
-size_output_vox = size_output_mm / spacing_output_mm
-delta_grid_mm = np.mgrid[
-        -size_output_mm[0]/2:size_output_mm[0]/2:spacing_output_mm[0],
-        -size_output_mm[1]/2:size_output_mm[1]/2:spacing_output_mm[1],
-        -size_output_mm[2]/2:size_output_mm[2]/2:spacing_output_mm[2]]
-delta_grid_mm = np.reshape(delta_grid_mm, (3,-1))
-
-def uid2patch(uid, cands1):
-    img_file = os.path.join(img_dir, uid + '.mhd')
-    if not os.path.isfile(img_file):
-        return 0
+#%%
+fun1(2)
     
-    img_np, origin_mm, spacing_mm = load_itk_image(img_file)
-    print('Loaded ' + img_file)
+#%% Functions to export patches after interpolation
+def uid2patch(uid, cands1, **kwargs):
+    if (uid2patch.uid_prev is None) or \
+            (uid != uid2patch.uid_prev):
+        
+        img_file = os.path.join(img_dir, uid + '.mhd')
+        
+        if not os.path.isfile(img_file):
+            return 0
+        
+        img_np, origin_mm, spacing_mm = load_itk_image(img_file)
+        
+        if img_np is not None:
+            print('Loaded ' + img_file)
+            uid2patch.uid_prev = uid
+            uid2patch.img_np_prev = img_np
+            uid2patch.origin_mm_prev = origin_mm
+            uid2patch.spacing_mm_prev = spacing_mm
+    else:
+        img_np = uid2patch.img_np_prev
+        origin_mm = uid2patch.origin_mm_prev
+        spacing_mm = uid2patch.spacing_mm_prev
     
     row_incl = np.nonzero(cands1.seriesuid == uid)[0]
     
     for i_row in row_incl:
-        cand2patch(cands1.iloc[i_row], img_np, origin_mm, spacing_mm)
-        break # DEBUG
+        cand2patch(cands1.iloc[i_row], img_np, origin_mm, spacing_mm,
+                   **kwargs)
     
     return 1
-
-def cand2patch(cand, img_np=None, origin_mm=None, spacing_mm=None,
-               is_annotation=True):
+uid2patch.uid_prev = None
+    
+def cand2patch_file(cand, diameter_mm=8*2.5*2, spacing_mm=0.5):
+    return os.path.join(
+            patch_dir, 
+            'patch=' + cand.seriesuid
+            + '+x=' + str(np.round(cand.coordX*10)/10) 
+            + '+y=' + str(np.round(cand.coordY*10)/10) 
+            + '+z=' + str(np.round(cand.coordZ*10)/10)
+            + '+dia=' + str(np.round(diameter_mm))
+            + '+spa=' + str(np.round(spacing_mm*10)/10))
+    
+def cand2patch(cand, img_np=None, origin_mm=None, spacing_input_mm=None,
+               is_annotation=True,
+               max_radius=8, 
+               spacing_output_mm=0.5,
+               radius_out_per_in=3
+               ):
     from scipy.interpolate import interpn
     from pysy import zipPickle
     
@@ -172,16 +202,18 @@ def cand2patch(cand, img_np=None, origin_mm=None, spacing_mm=None,
                     cand.coordY,
                     cand.coordX]),
         (3,1)) # z, y, x; bottom->up, ant->post, right->left
+
+    spacing_output_mm = np.zeros(3) + spacing_output_mm
+    dia_output_mm = np.zeros(3) + max_radius * radius_out_per_in * 2
+    dia_output_vox = dia_output_mm / spacing_output_mm
     
-    pth = os.path.join(
-            out_dir, 
-            'patch_' + uid
-            + '_' + str(np.round(origin_mm[0])) 
-            + '_' + str(np.round(origin_mm[1])) 
-            + '_' + str(np.round(origin_mm[2])))
+    uid = cand.seriesuid
+    pth = cand2patch_file(cand, 
+                          diameter_mm=dia_output_mm[0],
+                          spacing_mm=spacing_output_mm[0])
     
-    if not os.path.isdir(out_dir):
-        os.mkdir(out_dir)
+    if not os.path.isdir(patch_dir):
+        os.mkdir(patch_dir)
     
     if os.path.isfile(pth + '.zpkl') and \
             os.path.isfile(pth + '_slice0.png') and \
@@ -190,20 +222,30 @@ def cand2patch(cand, img_np=None, origin_mm=None, spacing_mm=None,
         print('Exists already. Skipping %s' % pth)
         return 0        
     
+    img_file = os.path.join(img_dir, uid + '.mhd')                    
     if img_np is None:
-        uid = cand.seriesuid
-        img_file = os.path.join(img_dir, uid + '.mhd')
         if not os.path.isfile(img_file):
             return 0
         
-        img_np, origin_mm, spacing_mm = load_itk_image(img_file)
+        img_np, origin_mm, spacing_input_mm = load_itk_image(img_file)
         print('Loaded ' + img_file)
     
-    grid0_mm = range(3)
+    delta_grid_mm = np.mgrid[
+        -dia_output_mm[0]/2:dia_output_mm[0]/2:spacing_output_mm[0],
+        -dia_output_mm[1]/2:dia_output_mm[1]/2:spacing_output_mm[1],
+        -dia_output_mm[2]/2:dia_output_mm[2]/2:spacing_output_mm[2]]
+    delta_grid_mm = np.reshape(delta_grid_mm, (3,-1))
+        
+    grid0_mm = [None, None, None]
     for dim in range(3):
-        grid0_mm[dim] = np.arange(img_np.shape[dim]) \
-                * spacing_mm[dim] \
+        temp = np.arange(img_np.shape[dim]) \
+                * spacing_input_mm[dim] \
                 + origin_mm[dim]
+
+#        print(grid0_mm[dim]) # DEBUG
+#        print(temp)
+
+        grid0_mm[dim] = temp
 
     grid_mm = np.transpose(delta_grid_mm + cand_mm)
     
@@ -220,13 +262,13 @@ def cand2patch(cand, img_np=None, origin_mm=None, spacing_mm=None,
     patch = interpn(grid0_mm, img_np, grid_mm, 
                     bounds_error=False,
                     fill_value=np.nan)
-    patch = np.reshape(patch, size_output_vox)
+    patch = np.reshape(patch, dia_output_vox)
     patch = normalizePlanes(patch)
     
-    print origin_mm
-    print patch.shape
-    print np.min(patch)
-    print np.max(patch)
+    print(origin_mm)
+    print(patch.shape)
+    print(np.min(patch))
+    print(np.max(patch))
     
     # axial
     patch1 = patch[patch.shape[0]/2,:,:]
@@ -270,17 +312,17 @@ def cand2patch(cand, img_np=None, origin_mm=None, spacing_mm=None,
         zipPickle.save({'img':np.uint16(patch*(2**16-1)), 
                         'cand_mm':cand_mm, 
                         'origin_mm':origin_mm,
-                        'spacing_mm':spacing_mm,
+                        'spacing_input_mm':spacing_input_mm,
                         'diameter_mm':diameter_mm},
                        fout)
         print('Saved to %s' % fout)
         
     return 1
 
-#%% Convert - demo
+#%% uid2patch demo
 uid2patch(uid0[0], cands_pos)
     
-#%% Convert - positive examples
+#%% cand2patch demo
 n_to_convert = 3
 for row in range(len(cands_pos)):
     cand = cands_pos.loc[row,:]
@@ -289,12 +331,30 @@ for row in range(len(cands_pos)):
         if n_to_convert == 0:
             break
 
-#%% Convert positive candidates to patches
-for uid1 in uids0:
-    uid2patch(uid1, cands_pos)
+#%% Output format based on radius
+# max radius is 16.14mm
+radius_min = [0, 8]
+radius_max = [8, 16]
+spacings_output_mm = [0.5, 1]
+radius_out_per_in = [2.5, 2]
+output_formats = pd.DataFrame({'radius_min': radius_min, 
+                              'radius_max': radius_max,
+                              'spacing_output_mm': spacings_output_mm,
+                              'radius_out_per_in': radius_out_per_in})
 
-#%% Convert candidates in given subsets to patches
-subset_incl = range(2,10)
+#%% Convert
+# Positive candidates to patches
+for uid1 in uids0:
+    for ii in range(len(output_formats)):
+        fmt = output_formats.loc[ii,:]    
+
+        uid2patch(uid1, cands_pos,
+                  max_radius = fmt.radius_max,
+                  spacing_output_mm = fmt.spacing_output_mm,
+                  radius_out_per_in = fmt.radius_out_per_in)
+
+# Negative candidates in given subsets to patches
+subset_incl = [0] # range(10)
 
 for subset1 in subset_incl:
     uids_in_subset1 = uid_subset.seriesuid[ \
