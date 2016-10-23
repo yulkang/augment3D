@@ -79,10 +79,9 @@ meta_file = 'Data/LUNA/img_meta.csv'
 #uid0 = '1.3.6.1.4.1.14519.5.2.1.6279.6001.213140617640021803112060161074'
 
 #%% load candidates
-cands = annot.cands
+cands = annot.cands_vs_annot
 cands_pos = annot.cands_pos
 uid_subset = annot.uid_subset
-cands_vs_annot = annot.cands_vs_annot
 cands_neg = cands.loc[cands.loc[:,'class'] != 1, :]
 
 #%% Get unique uids
@@ -183,28 +182,29 @@ uid2patch.uid_prev = None
 def cand_scale2patch_file(cand, 
                           output_format=output_formats.iloc[0,:]):
     fmt = output_format
+    print(cand) # DEBUG
     is_pos = cand['is_pos']
 
     if is_pos:
-        max_radius = fmt.radius_max * (fmt.radius_out_per_in + 1)
+        max_radius = fmt['radius_max'] * (fmt['radius_out_per_in'] + 1)
     else:
-        max_radius = fmt.radius_max * fmt.radius_out_per_in
+        max_radius = fmt['radius_max'] * fmt['radius_out_per_in']
             
     diameter_mm = max_radius * 2
-    spacing_mm = fmt.spacing_output_mm
+    spacing_mm = fmt['spacing_output_mm']
         
-    converted = cand2patch_file(cand, 
-                                diameter_mm = diameter_mm,
-                                spacing_mm = spacing_mm)
-    return converted, diameter_mm, spacing_mm
+    patch_file = cand2patch_file(cand, 
+                                 diameter_mm = diameter_mm,
+                                 spacing_mm = spacing_mm)
+    return patch_file, diameter_mm, spacing_mm
     
 def cand2patch_file(cand, diameter_mm=8*2.5*2, spacing_mm=0.5):
     return os.path.join(
             patch_dir, 
-            'patch=' + cand.seriesuid
-            + '+x=' + str(np.round(cand.coordX*10)/10) 
-            + '+y=' + str(np.round(cand.coordY*10)/10) 
-            + '+z=' + str(np.round(cand.coordZ*10)/10)
+            'patch=' + cand['seriesuid']
+            + '+x=' + str(np.round(cand['coordX']*10)/10) 
+            + '+y=' + str(np.round(cand['coordY']*10)/10) 
+            + '+z=' + str(np.round(cand['coordZ']*10)/10)
             + '+dia=' + str(np.round(diameter_mm))
             + '+spa=' + str(np.round(spacing_mm*10)/10))
     
@@ -219,14 +219,14 @@ def cand2patch(cand, img_np=None, origin_mm=None, spacing_input_mm=None,
     from scipy.interpolate import interpn
     from pysy import zipPickle
     
-    uid = cand.seriesuid
+    uid = cand['seriesuid']
     cand_mm = np.reshape(
-        np.asarray([cand.coordZ,
-                    cand.coordY,
-                    cand.coordX]),
+        np.asarray([cand['coordZ'],
+                    cand['coordY'],
+                    cand['coordX']]),
         (3,1)) # z, y, x; bottom->up, ant->post, right->left
                     
-    uid = cand.seriesuid
+    uid = cand['seriesuid']
     pth, dia_output_mm, spacing_output_mm = cand_scale2patch_file(
             cand, output_format)
     
@@ -342,25 +342,25 @@ def cand2patch(cand, img_np=None, origin_mm=None, spacing_input_mm=None,
     return 1
 
 #%% When run as a script
-if __name__ == '__main__':
-#    #%% Test load_itk_image
-#    img_file = uid2mhd_file(uid0[0])
-#    img_np, origin_mm, spacing_input_mm = load_itk_image(img_file)
-#    print(img_np.shape)
-#    print(origin_mm)
-#    print(spacing_input_mm)
-#    
-#    #%% uid2patch demo
-#    uid2patch(uid0[0], cands_pos)
-#        
-#    #%% cand2patch demo
-#    n_to_convert = 3
-#    n_converted = 0
-#    for row in range(len(cands_pos)):
-#        cand = cands_pos.loc[row,:]
-#        n_converted += cand2patch(cand)
-#        if n_converted >= n_to_convert:
-#            break
+def main():
+    #    #%% Test load_itk_image
+    #    img_file = uid2mhd_file(uid0[0])
+    #    img_np, origin_mm, spacing_input_mm = load_itk_image(img_file)
+    #    print(img_np.shape)
+    #    print(origin_mm)
+    #    print(spacing_input_mm)
+    #    
+    #    #%% uid2patch demo
+    #    uid2patch(uid0[0], cands_pos)
+    #        
+    #    #%% cand2patch demo
+    #    n_to_convert = 3
+    #    n_converted = 0
+    #    for row in range(len(cands_pos)):
+    #        cand = cands_pos.loc[row,:]
+    #        n_converted += cand2patch(cand)
+    #        if n_converted >= n_to_convert:
+    #            break
     
     #%% Convert
     # Annotated (positive) candidates to patches
@@ -420,4 +420,8 @@ if __name__ == '__main__':
                 break
             
         if n_uid_converted >= n_uid_to_convert:
-            break            
+            break                
+    
+#%%
+if __name__ == '__main__':
+    main()
