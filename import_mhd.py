@@ -82,7 +82,7 @@ meta_file = 'Data/LUNA/img_meta.csv'
 cands = annot.cands_vs_annot
 cands_pos = annot.cands_pos
 uid_subset = annot.uid_subset
-cands_neg = cands.loc[cands.loc[:,'class'] != 1, :]
+cands_neg = annot.cands_neg
 
 #%% Get unique uids
 uid0 = cands.seriesuid
