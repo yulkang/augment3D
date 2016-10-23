@@ -20,6 +20,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import warnings
 import compare_cand_vs_annot as annot
+from pysy.stat import ecdf
 
 #%% Define functions
 def load_itk_image(filename):
@@ -146,7 +147,7 @@ fun1.static = None
 fun1(2)
     
 #%% Functions to export patches after interpolation
-def uid2patch(uid, cands1, **kwargs):
+def uid2patch(uid, cands1, n_to_convert=None, **kwargs):
     if (uid2patch.uid_prev is None) or \
             (uid != uid2patch.uid_prev):
         
@@ -170,11 +171,18 @@ def uid2patch(uid, cands1, **kwargs):
     
     row_incl = np.nonzero(cands1.seriesuid == uid)[0]
     
+    if n_to_convert is None:
+        n_to_convert = np.inf
+    n_converted = 0
+
     for i_row in row_incl:
-        cand2patch(cands1.iloc[i_row], img_np, origin_mm, spacing_mm,
-                   **kwargs)
+        n_converted += cand2patch(cands1.iloc[i_row], 
+                                  img_np, origin_mm, spacing_mm,
+                                  **kwargs)
+        if n_converted >= n_to_convert:
+            break # DEBUG
     
-    return 1
+    return n_converted
 uid2patch.uid_prev = None
     
 def cand2patch_file(cand, diameter_mm=8*2.5*2, spacing_mm=0.5):
@@ -191,7 +199,8 @@ def cand2patch(cand, img_np=None, origin_mm=None, spacing_input_mm=None,
                is_annotation=True,
                max_radius=8, 
                spacing_output_mm=0.5,
-               radius_out_per_in=3
+               radius_out_per_in=2,
+               radius_margin=8
                ):
     from scipy.interpolate import interpn
     from pysy import zipPickle
@@ -204,7 +213,8 @@ def cand2patch(cand, img_np=None, origin_mm=None, spacing_input_mm=None,
         (3,1)) # z, y, x; bottom->up, ant->post, right->left
 
     spacing_output_mm = np.zeros(3) + spacing_output_mm
-    dia_output_mm = np.zeros(3) + max_radius * radius_out_per_in * 2
+    dia_output_mm = np.zeros(3) \
+            + (max_radius * radius_out_per_in + radius_margin) * 2
     dia_output_vox = dia_output_mm / spacing_output_mm
     
     uid = cand.seriesuid
@@ -333,31 +343,47 @@ for row in range(len(cands_pos)):
 
 #%% Output format based on radius
 # max radius is 16.14mm
-radius_min = [0, 8]
-radius_max = [8, 16]
-spacings_output_mm = [0.5, 1]
-radius_out_per_in = [2.5, 2]
+radius_min = [0, 4, 8]
+radius_max = [4, 8, 16]
+spacings_output_mm = [0.4, 0.8, 1.6]
+radius_out_per_in =  [2,   2, 2]
 output_formats = pd.DataFrame({'radius_min': radius_min, 
                               'radius_max': radius_max,
                               'spacing_output_mm': spacings_output_mm,
                               'radius_out_per_in': radius_out_per_in})
 
 #%% Convert
-# Positive candidates to patches
+# Annotated (positive) candidates to patches
+n_uid_to_convert = np.inf
+n_uid_converted = 0
 for uid1 in uids0:
     for ii in range(len(output_formats)):
         fmt = output_formats.loc[ii,:]    
 
-        uid2patch(uid1, cands_pos,
+        converted = uid2patch(uid1, cands_pos,
                   max_radius = fmt.radius_max,
                   spacing_output_mm = fmt.spacing_output_mm,
-                  radius_out_per_in = fmt.radius_out_per_in)
-
-# Negative candidates in given subsets to patches
+                  radius_out_per_in = fmt.radius_out_per_in,
+                  radius_margin = fmt.radius_max)
+    
+    n_uid_converted += (converted != 0)
+    if n_uid_converted >= n_uid_to_convert:
+        break
+    
+# Positive and Negative candidates in given subsets to patches
+# Do not give margin since we won't augment the data
 subset_incl = [0] # range(10)
 
 for subset1 in subset_incl:
     uids_in_subset1 = uid_subset.seriesuid[ \
             uid_subset.subset.isin([subset1])]
-    for uid1 in uids_in_subset1:
-        uid2patch(uid1, cands_neg)
+    for uid1 in uids_in_subset1[0:1]:
+        for ii in range(len(output_formats)):
+            fmt = output_formats.loc[ii,:]
+
+            uid2patch(uid1, cands,
+                      max_radius = fmt.radius_max,
+                      spacing_output_mm = fmt.spacing_output_mm,
+                      radius_out_per_in = fmt.radius_out_per_in,
+                      radius_margin = 0,
+                      n_to_convert = np.inf)
