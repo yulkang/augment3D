@@ -89,16 +89,22 @@ cands_neg = cands.loc[cands.loc[:,'class'] != 1, :]
 uid0 = cands.seriesuid
 uids0 = cands.seriesuid.unique()
 
+#%% Output format based on radius
+# max radius is 16.14mm
+radius_min_incl = [0, 4, 8]
+radius_max_incl = [4, 8, np.inf]
+radius_max = [4, 8, 16]
+spacings_output_mm = [0.4, 0.8, 1.6]
+radius_out_per_in =  [2,   2,   2]
+output_formats = pd.DataFrame({'radius_min_incl': radius_min_incl, 
+                               'radius_max_incl': radius_max_incl,
+                               'radius_max': radius_max,
+                               'spacing_output_mm': spacings_output_mm,
+                               'radius_out_per_in': radius_out_per_in})
+
 #%% uid2meta - example
 def uid2mhd_file(uid):
     return os.path.join(img_dir, uid + '.mhd')
-
-#%% Test load_itk_image
-img_file = uid2mhd_file(uid0[0])
-img_np, origin_mm, spacing_input_mm = load_itk_image(img_file)
-print(img_np.shape)
-print(origin_mm)
-print(spacing_mm)
 
 #%% Export metadata (shape, origin, spacing)
 def uid2meta(uids=uids0):
@@ -133,19 +139,6 @@ if os.path.isfile(meta_file):
 else:
     tbl = uid2meta(uids0)
           
-#%%
-def fun1(inp):
-    if fun1.static is None or \
-            inp == fun1.static:
-        print('static <- inp')
-        fun1.static = inp
-    else:
-        print(fun1.static)
-fun1.static = None
-
-#%%
-fun1(2)
-    
 #%% Functions to export patches after interpolation
 def uid2patch(uid, cands1, n_to_convert=None, **kwargs):
     if (uid2patch.uid_prev is None) or \
@@ -184,6 +177,19 @@ def uid2patch(uid, cands1, n_to_convert=None, **kwargs):
     
     return n_converted
 uid2patch.uid_prev = None
+
+def cand_scale2patch_file(cand, scale=0, is_pos=False):
+    fmt = output_formats.loc[scale,:]
+
+    if is_pos:
+        max_radius = fmt.radius_max * (fmt.radius_out_per_in + 1)
+    else:
+        max_radius = fmt.radius_max * fmt.radius_out_per_in
+            
+    converted = cand2patch_file(cand, 
+                                diameter_mm = max_radius * 2,
+                                spacing_mm = fmt.spacing_output_mm)
+    return converted
     
 def cand2patch_file(cand, diameter_mm=8*2.5*2, spacing_mm=0.5):
     return os.path.join(
@@ -329,61 +335,82 @@ def cand2patch(cand, img_np=None, origin_mm=None, spacing_input_mm=None,
         
     return 1
 
-#%% uid2patch demo
-uid2patch(uid0[0], cands_pos)
+#%% When run as a script
+if __name__ == '__main__':
+#    #%% Test load_itk_image
+#    img_file = uid2mhd_file(uid0[0])
+#    img_np, origin_mm, spacing_input_mm = load_itk_image(img_file)
+#    print(img_np.shape)
+#    print(origin_mm)
+#    print(spacing_input_mm)
+#    
+#    #%% uid2patch demo
+#    uid2patch(uid0[0], cands_pos)
+#        
+#    #%% cand2patch demo
+#    n_to_convert = 3
+#    n_converted = 0
+#    for row in range(len(cands_pos)):
+#        cand = cands_pos.loc[row,:]
+#        n_converted += cand2patch(cand)
+#        if n_converted >= n_to_convert:
+#            break
     
-#%% cand2patch demo
-n_to_convert = 3
-for row in range(len(cands_pos)):
-    cand = cands_pos.loc[row,:]
-    if cand2patch(cand):
-        n_to_convert -= 1
-        if n_to_convert == 0:
-            break
+    #%% Convert
+    # Annotated (positive) candidates to patches
+    n_uid_to_convert = np.inf
+    n_uid_converted = 0
+    n_uid = len(uids0)
+    for i_uid in range(n_uid):
+        uid1 = uids0[i_uid]
+        print('uid %d/%d' % (i_uid, n_uid))
 
-#%% Output format based on radius
-# max radius is 16.14mm
-radius_min = [0, 4, 8]
-radius_max = [4, 8, 16]
-spacings_output_mm = [0.4, 0.8, 1.6]
-radius_out_per_in =  [2,   2, 2]
-output_formats = pd.DataFrame({'radius_min': radius_min, 
-                              'radius_max': radius_max,
-                              'spacing_output_mm': spacings_output_mm,
-                              'radius_out_per_in': radius_out_per_in})
-
-#%% Convert
-# Annotated (positive) candidates to patches
-n_uid_to_convert = np.inf
-n_uid_converted = 0
-for uid1 in uids0:
-    for ii in range(len(output_formats)):
-        fmt = output_formats.loc[ii,:]    
-
-        converted = uid2patch(uid1, cands_pos,
-                  max_radius = fmt.radius_max,
-                  spacing_output_mm = fmt.spacing_output_mm,
-                  radius_out_per_in = fmt.radius_out_per_in,
-                  radius_margin = fmt.radius_max)
-    
-    n_uid_converted += (converted != 0)
-    if n_uid_converted >= n_uid_to_convert:
-        break
-    
-# Positive and Negative candidates in given subsets to patches
-# Do not give margin since we won't augment the data
-subset_incl = [0] # range(10)
-
-for subset1 in subset_incl:
-    uids_in_subset1 = uid_subset.seriesuid[ \
-            uid_subset.subset.isin([subset1])]
-    for uid1 in uids_in_subset1[0:1]:
         for ii in range(len(output_formats)):
-            fmt = output_formats.loc[ii,:]
-
-            uid2patch(uid1, cands,
+            fmt = output_formats.loc[ii,:]    
+    
+            converted = uid2patch(uid1, cands_pos,
                       max_radius = fmt.radius_max,
                       spacing_output_mm = fmt.spacing_output_mm,
                       radius_out_per_in = fmt.radius_out_per_in,
-                      radius_margin = 0,
-                      n_to_convert = np.inf)
+                      radius_margin = fmt.radius_max)
+        
+        n_uid_converted += (converted > 0)
+        if n_uid_converted >= n_uid_to_convert:
+            break
+        
+    #%%
+    # Positive and Negative candidates in given subsets to patches
+    # Do not give margin since we won't augment the data
+    subset_incl = [0] # range(10)
+    n_subset = len(subset_incl)
+    n_uid_to_convert = np.inf
+    n_uid_converted = 0
+    
+    for i_subset in range(n_subset):
+        subset1 = subset_incl[i_subset]
+        uids_in_subset1 = uid_subset.seriesuid[ \
+                uid_subset.subset.isin([subset1])]
+
+        n_uid = len(uids_in_subset1)            
+        for i_uid in range(n_uid):
+            uid1 = uids_in_subset1[i_uid]
+            print('uid %d/%d, subset %d' % (i_uid, n_uid, subset1))
+            
+            
+            for ii in range(len(output_formats)):
+                fmt = output_formats.loc[ii,:]
+    
+                converted = uid2patch(
+                         uid1, cands,
+                         max_radius = fmt.radius_max,
+                         spacing_output_mm = fmt.spacing_output_mm,
+                         radius_out_per_in = fmt.radius_out_per_in,
+                         radius_margin = 0,
+                         n_to_convert = np.inf)
+                
+            n_uid_converted += (converted > 0)
+            if n_uid_converted >= n_uid_to_convert:
+                break
+            
+        if n_uid_converted >= n_uid_to_convert:
+            break            
