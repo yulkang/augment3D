@@ -6,7 +6,7 @@ Created on Sat Jun 11 17:09:43 2016
 @author: yulkang
 """
 
-#%%
+#%% Import
 # These are all the modules we'll be using later. Make sure you can import them
 # before proceeding further.
 from __future__ import print_function
@@ -17,9 +17,64 @@ from six.moves import range
 
 import pandas as pd
 import warnings
-import compare_cand_vs_annot as annot
 import os
+from pysy import zipPickle
 
+import compare_cand_vs_annot as annot
+import import_mhd as mhd
+
+#%% Choose train and test datasets
+# Train: All positive in the subset + 3x negative (random subset)
+cands_pos = annot.cands_pos
+cands_neg = annot.cands_neg
+
+subset_incl_pos = np.arange(9)
+subset_incl_neg = np.array([0])
+
+cands_pos = cands_pos.ix[cands_pos.subset.isin(subset_incl_pos),:]
+cands_neg = cands_neg.ix[cands_neg.subset.isin(subset_incl_neg),:]
+
+n_pos = len(cands_pos)
+memory_available_MB = 1000
+memory_per_cand_neg_MB = 0.5
+n_neg = np.int32(np.min((memory_available_MB / memory_per_cand_neg_MB, 
+                len(cands_neg))))
+
+cands_neg = cands_neg.iloc[:n_neg,:]
+cands_all = pd.concat((cands_pos, cands_neg), axis=0)
+n_all = len(cands_all)
+
+#%% Load dataset
+def load_cand(cands, scale=0):
+    n_cand = len(cands)
+    n_loaded = 0
+    ix_loaded = np.zeros((n_cand), dtype=int32)
+    
+    for i_cand in range(n_cand):
+        cand = cands.loc[i_cand,:]
+        patch_file = mhd.cand_scale2patch_file(cand, scale, cand['is_pos'])
+        if os.path.is_file(patch_file):
+            L = zipPickle.load(patch_file)
+            n_loaded += 1
+        else:
+            continue
+        
+        if n_loaded == 1:
+            siz = np.concatenate(([n_cand], L.img.shape, [1]))
+            img_all = np.zeros(siz, dtype=np.float32)
+        
+        img_all[n_loaded,:,:,:,0] = np.reshape(L['img'], )
+        ix_loaded[n_loaded] = i_cand
+            
+    img_all = img_all[:n_loaded,:,:,:,:]
+    ix_loaded = ix_loaded[:n_loaded]
+    ix_loaded = cands.index(ix_loaded)
+    label_all = cands.loc[ix_loaded,'is_pos']
+        
+    return img_all, label_all, ix_loaded
+
+img_all, label_all, ix_loaded = load_cand(cands_all)
+    
 #%%
 pickle_file = 'Data/notMNIST.pickle'
 
