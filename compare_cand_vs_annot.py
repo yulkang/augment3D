@@ -18,6 +18,12 @@ uid_subset_file = 'Data/LUNA/uid_subset.csv'
 #%% Load csvs
 cands = pd.read_csv(cand_file)
 cands_pos = pd.read_csv(annotation_file)
+n_pos = len(cands_pos)
+cands_pos.loc[:,'is_pos'] = np.ones(n_pos, dtype=np.bool)
+cands_pos.loc[:,'dist'] = np.zeros(n_pos, dtype=np.float16)
+cands_pos.loc[:,'ix_pos'] = cands_pos.index
+cands_pos.loc[:,'radius'] = cands_pos.loc[:,'diameter_mm']/2
+
 uid_subset = pd.read_csv(uid_subset_file)
 
 uids = cands_pos.seriesuid.unique()
