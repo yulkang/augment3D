@@ -28,6 +28,9 @@ else:
     print('Run compare_cand_vs_annot.main() to save cands_vs_annot at %s' \
           % cand_out_file)
 
+cands_vs_annot.loc[:,'is_pos'] = cands_vs_annot.loc[:,'is_pos']==1
+cands_neg = cands_vs_annot.ix[~cands_vs_annot.is_pos,:]
+
 n_cand = len(cands)
 n_cand_pos = len(cands_pos)
 
@@ -102,7 +105,7 @@ def match_uids(uids1):
 def subset2cand(cands1 = cands):
     if np.any(cands1.columns.isin(['subset'])):
         return 0
-        
+                
     subsets1 = np.zeros(len(cands1))
         
     for subset1 in uid_subset.subset.unique():
@@ -111,6 +114,7 @@ def subset2cand(cands1 = cands):
         same_uid = np.nonzero(cands1.seriesuid.isin(uid_subset1))
         subsets1[same_uid] = subset1
 
-    cands1.loc[:,'subsets1'] = subsets1
+    cands1.loc[:,'subset'] = subsets1
     return 1
     
+#subset2cand(cands_pos)
