@@ -24,6 +24,9 @@ uids = cands_pos.seriesuid.unique()
 
 if os.path.isfile(cand_out_file):
     cands_vs_annot = pd.read_csv(cand_out_file)
+else:
+    print('Run compare_cand_vs_annot.main() to save cands_vs_annot at %s' \
+          % cand_out_file)
 
 n_cand = len(cands)
 n_cand_pos = len(cands_pos)
