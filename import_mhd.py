@@ -294,9 +294,9 @@ def cand2patch(cand, img_np=None, origin_mm=None, spacing_input_mm=None,
     
     # axial
     patch1 = patch[patch.shape[0]/2,:,:]
-    plt.imshow(patch1, 
-               cmap='gray')
-    plt.show()
+#    plt.imshow(patch1, 
+#               cmap='gray')
+#    plt.show()
     
     # Save preview
     fout = pth + '_slice0.png'
@@ -306,9 +306,9 @@ def cand2patch(cand, img_np=None, origin_mm=None, spacing_input_mm=None,
 
     # coronal
     patch1 = patch[:,patch.shape[1]/2,:]
-    plt.imshow(patch1,
-               cmap='gray')
-    plt.show()
+#    plt.imshow(patch1,
+#               cmap='gray')
+#    plt.show()
     
     # Save preview
     fout = pth + '_slice1.png'
@@ -318,9 +318,9 @@ def cand2patch(cand, img_np=None, origin_mm=None, spacing_input_mm=None,
     
     # sagittal
     patch1 = patch[:,:,patch.shape[2]/2]
-    plt.imshow(patch1,
-               cmap='gray')
-    plt.show()
+#    plt.imshow(patch1,
+#               cmap='gray')
+#    plt.show()
     
     # Save preview
     fout = pth + '_slice2.png'
