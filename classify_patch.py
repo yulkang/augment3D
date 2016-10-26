@@ -121,27 +121,24 @@ img_neg, label_neg, ix_loaded_neg = load_cand(cands_neg.iloc[:,:])
 img_pos, label_pos, ix_loaded_pos = load_cand(cands_pos.iloc[:,:])
 
 #%%
-img_size = img_neg.shape[0]
-n_labels = 2
-n_chan = 1 # grayscale
-
-#%%
-def accuracy(predictions, labels):
-  return (100.0 * np.mean(predictions == labels))
-  
-#%%
-batch_size = 128 # 16
-patch_size = 4
-depth = 64
-n_hidden = 64
-  
-#%%
 if 'sess' in vars():
     sess.close()
     
 sess = tf.InteractiveSession()
 
-#%% Input data.
+#%% Settings
+img_size = img_neg.shape[1]
+
+n_labels = 2
+n_chan = 1 # grayscale
+batch_size = 128 # 16
+patch_size = 4
+stride_size = 2
+pool_size = 2
+depth_conv = 64
+n_hidden = 64
+  
+# Input data.
 x = tf.placeholder(tf.float32, 
                    shape=[None, img_size, img_size, img_size, n_chan])
 y = tf.placeholder(tf.float32, 
@@ -154,37 +151,41 @@ y = tf.placeholder(tf.float32,
 #tf_test_dataset = tf.constant(test_dataset)
 
 #%% Variables.
-keep_prob_train = [.5, 1, 1, 1]
-keep_all = [1, 1, 1, 1]
+keep_prob_train = [1, 1, 1, .5, .5]
+keep_all = np.ones(len(keep_prob_train))
 
-layer_kind = ['conv', 'conv', 'dense', 'dense']
-stride_conv = [1, 1, 0, 0]
-width_conv = [5, 5, 0, 0]
-width_pool = [2, 2, 0, 0]
-depth_out = [16, 16, 16, 16]
-depth_in = n_chan + depth_out[:-1]
+layer_kind = ['conv', 'conv', 'conv', 'dense', 'dense']
+is_conv = np.array([kind1 == 'conv' for kind1 in layer_kind], dtype=np.int32)
+width_mult = is_conv * patch_size
+stride_mult = is_conv * stride_size
+width_pool = np.array([0, 0, 0, 0, 0]) * pool_size
+depth_out = np.ones(len(layer_kind)) * depth_conv
+depth_in = [n_chan] + list(depth_out[:-1])
 
 weights0 = list()
 biases = list()
 
+#%%
 n_layer = len(layer_kind)
 for layer in range(n_layer):
-  if layer_kind[layer] == 'conv':
-    weights0.append(tf.Variable(tf.truncated_normal(
-      [width_conv[layer], 
-       width_conv[layer], 
-       depth_in[layer], 
-       depth_out[layer]],
-      stddev = 0.1)))
-    biases.append(tf.Variable(tf.constant(1.0, shape=[depth_out[layer]])))
-  elif layer_kind[layer] == 'dense':
-    
-  else:
-    raise(ValueError)
-    
+    if layer_kind[layer] == 'conv':
+        weights0.append(tf.Variable(tf.truncated_normal(
+            [width_mult[layer], 
+             width_mult[layer], 
+             width_mult[layer], 
+             depth_in[layer], 
+             depth_out[layer]],
+            stddev = 0.1)))
+        biases.append(tf.Variable(tf.constant(1.0, shape=[depth_out[layer]])))
+    elif layer_kind[layer] == 'dense':
+        pass
+    else:
+        raise ValueError('layer_kind[%d]=%s not allowed!' % 
+                         (layer, layer_kind[layer]))
 
+#%%
 weights0.append(tf.Variable(tf.truncated_normal(
-    [patch_size, patch_size, n_chan, depth_conv[0]], stddev=0.1)))
+    [patch_size, patch_size, patch_size, n_chan, depth_conv[0]], stddev=0.1)))
 biases.append(tf.Variable(tf.zeros([depth_conv[0]])))
 
 weights0.append(tf.Variable(tf.truncated_normal(
@@ -192,7 +193,7 @@ weights0.append(tf.Variable(tf.truncated_normal(
 biases.append(tf.Variable(tf.constant(1.0, shape=[depth])))
 
 weights0.append(tf.Variable(tf.truncated_normal(
-    [img_size // stride_conv[0]**2 * img_size // stride_conv[0]**2 * depth, 
+    [img_size // stride_mult[0]**2 * img_size // stride_mult[0]**2 * depth, 
      n_hidden], stddev=0.1)))
 biases.append(tf.Variable(tf.constant(1.0, shape=[n_hidden])))
 
@@ -200,47 +201,50 @@ weights0.append(tf.Variable(tf.truncated_normal(
     [n_hidden, n_labels], stddev=0.1)))
 biases.append(tf.Variable(tf.constant(1.0, shape=[n_labels])))
 
-# Model.
+#%% Model.
+def accuracy(predictions, labels):
+    return (100.0 * np.mean(predictions == labels))
+  
 def add_conv2d(inp, weight, bias,
              keep_prob = 1, 
              stride = 2):
   
-  weight_dropout = tf.nn.dropout(weight, keep_prob)
-  stride_model = [1, stride, stride, 1]
-  conv = tf.nn.conv2d(inp, weight_dropout, stride_model, 
-                      padding='SAME')
-  hidden = tf.nn.relu(conv + bias)
-  hidden = tf.nn.max_pool(hidden, stride_model, stride_model, 
-                          padding='SAME')
-  return hidden
+    weight_dropout = tf.nn.dropout(weight, keep_prob)
+    stride_model = [1, stride, stride, 1]
+    conv = tf.nn.conv2d(inp, weight_dropout, stride_model, 
+                      padding='VALID')
+    hidden = tf.nn.relu(conv + bias)
+    hidden = tf.nn.max_pool(hidden, stride_model, stride_model, 
+                          padding='VALID')
+    return hidden
   
 def add_dense(inp, weight, bias, keep_prob = 1, depth, is_final = False):
-  shape = np.array(inp.get_shape().as_list())
-  reshape = tf.reshape(inp, [-1, np.prod(shape[1:])])
-  dense = tf.matmul(reshape, weight) + bias
-  if not is_final:
-    dense = tf.nn.relu(dense)
-  return dense
+    shape = np.array(inp.get_shape().as_list())
+    reshape = tf.reshape(inp, [-1, np.prod(shape[1:])])
+    dense = tf.matmul(reshape, weight) + bias
+    if not is_final:
+        dense = tf.nn.relu(dense)
+    return dense
   
 def model(keep_prob):
-  weights = list()
-  for layer in range(len(weights0)):
-    weights.append(tf.nn.dropout(weights0[layer], keep_prob[layer]))
+    weights = list()
+    for layer in range(len(weights0)):
+        weights.append(tf.nn.dropout(weights0[layer], keep_prob[layer]))
   
-  layer = 0
-  hidden = add_conv2d(x, weights[0], keep_prob[0], stride[0])
+    layer = 0
+    hidden = add_conv2d(x, weights[0], keep_prob[0], stride[0])
   
-  for i_conv in np.arange(1, n_conv):
-    layer += 1
-    hidden = add_conv2d(hidden, weights[layer], keep_prob[layer], 
-                        stride_conv[layer])
+    for i_conv in np.arange(1, n_conv):
+        layer += 1
+        hidden = add_conv2d(hidden, weights[layer], keep_prob[layer], 
+                        stride_mult[layer])
   
-  for i_dense in np.arange(1, n_dense):
-    layer += 1
-    hidden = add_dense(hidden, weights[layer], bias[layer], keep_prob[layer], 
+    for i_dense in np.arange(1, n_dense):
+        layer += 1
+        hidden = add_dense(hidden, weights[layer], bias[layer], keep_prob[layer], 
                        is_final = i_dense == n_dense)
     
-  return hidden
+    return hidden
 
 # Training computation / Optimizer
 logits_train = model(keep_prob_train)
@@ -285,10 +289,3 @@ for step1 in range(num_steps):
 print('Test accuracy: %.1f%%' % accuracy(
   valid_prediction.eval(
     feed_dict = {x : test_dataset}), test_labels))
-
-
-#%% Problem 2
-# Try to get the best performance you can using a convolutional net. 
-# Look for example at the classic LeNet5 architecture, 
-# adding Dropout, and/or adding learning rate decay.
-
