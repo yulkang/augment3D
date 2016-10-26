@@ -158,22 +158,21 @@ def add_dense(inp, depth_out,
               stddev = 0.1, 
               is_final = False):
     shape_inp = np.array(inp.get_shape().as_list())
+    print('  shape_inp:', end='')
+    print(shape_inp)
     n_inp = np.prod(shape_inp[1:])
+    print('  n_inp: %d' % n_inp)
     inp_reshaped = tf.reshape(inp, [-1, n_inp])
     weight = tf.Variable(tf.truncated_normal(
             [n_inp, depth_out], stddev = stddev))    
     weight_dropout = tf.nn.dropout(weight, keep_prob)
+    print('  weight:', end='')
+    print(weight_dropout.get_shape().as_list())
     bias_op = tf.Variable(tf.constant(bias), [depth_out])
     dense = tf.matmul(inp_reshaped, weight_dropout) + bias_op
     if not is_final:
         dense = tf.nn.relu(dense)
     return dense
-
-#%% Start session
-if 'sess' in vars():
-    sess.close()
-    
-sess = tf.InteractiveSession()
 
 #%% Settings
 img_size = img_neg.shape[1]
@@ -227,7 +226,8 @@ biases = list()
 def model(keep_probs):
     curr_layer = x
     for layer in range(n_layer):
-        print('Input to layer %d :' % layer, end='')
+        print('--- Layer %d ---' % layer)
+        print('Input :', end='')
         print(curr_layer.get_shape().as_list(), end='\n')
         
         if layer_kind[layer] == 'conv':
@@ -248,12 +248,12 @@ def model(keep_probs):
             raise ValueError('layer_kind[%d]=%s not allowed!' % 
                              (layer, layer_kind[layer]))
         
-        print('Output of layer %d:' % layer, end='')
+        print('Output:', end='')
         print(curr_layer.get_shape().as_list(), end='\n')
         
     return curr_layer
 
-# Training computation / Optimizer
+# Cost function
 logits_train = model(keep_probs_train)
 loss_train = tf.reduce_mean(
     tf.nn.softmax_cross_entropy_with_logits(logits_train, y))
@@ -262,37 +262,76 @@ train_prediction = tf.nn.softmax(logits_train)
 logits = model(keep_probs_all)
 valid_prediction = tf.nn.softmax(logits)  
 
-# Optimizer.
+# Optimizer
 optimizer = tf.train.GradientDescentOptimizer(0.05).minimize(loss_train)
 
-#%%
-sess.run(tf.initialize_all_variables())
-print('Initialized')
-step = 0
+#%% Prepare datasets
+prop_test = 0.1
+prop_validation = 0.1
+n_data = n_pos + n_neg
+n_test = np.int32(n_data * prop_test)
+n_validation = np.int32(n_data * prop_validation)
+n_train = n_data - n_test - n_validation
 
-#%%
-num_steps = 1001 # 3000 steps give test accuracy 91.5%
-display_per_step = 200
+def reformat(dataset, labels):
+    dataset = dataset.reshape(
+        [-1] + [img_size] * 3 + [n_chan]).astype(np.float32)
+    labels = (np.arange(n_labels) == labels[:,None]).astype(np.float32)
+    return dataset, labels
 
-#%%
-for step1 in range(num_steps):
-  step += 1
-  
-  offset = (step * batch_size) % (train_labels.shape[0] - batch_size)
-  batch_data = train_dataset[offset:(offset + batch_size), :, :, :]
-  batch_labels = train_labels[offset:(offset + batch_size), :]
-  feed_dict = {x : batch_data, y : batch_labels}
-  _, l, predictions = sess.run(
-    [optimizer, loss_train, train_prediction], feed_dict=feed_dict)
-  if (step % display_per_step == 0):
-    print('Minibatch loss at step %d: %f' % (step, l))
-    print('Minibatch accuracy: %.1f%%' % accuracy(predictions, batch_labels))
-    print('Validation accuracy: %.1f%%' % accuracy(
-      valid_prediction.eval(
-        feed_dict = {x : valid_dataset}), 
-        valid_labels))
+def get_data(n_pos, n_neg):
+    # Load further data for negative examples.
+    # Generate further data for positive examples.
+    
+    ix_data = np.arange(n_data)
+    np.random.shuffle(ix_data)
+    ix_test = ix_data[:n_test]
+    ix_validation = ix_data[n_test:(n_test + n_validation)]
+    ix_train = ix_data[(n_test + n_validation):]
+                       
+    return dataset, labels
+    
+
+    
+def init():                   
+#    #%% Start session
+#    if 'sess' in vars():
+#        sess.close()
+        
+    sess = tf.InteractiveSession()
+    
+    # Begin session
+    sess.run(tf.initialize_all_variables())
+    print('Initialized')
+    step = 0
+    
+    return sess, step
     
 #%%
+    
+    for step1 in range(n_steps):
+        step += 1
+      
+        offset = (step * batch_size) % (train_labels.shape[0] - batch_size)
+        batch_data = train_dataset[offset:(offset + batch_size), :, :, :]
+        batch_labels = train_labels[offset:(offset + batch_size), :]
+        feed_dict = {x : batch_data, y : batch_labels}
+        _, l, predictions = sess.run(
+            [optimizer, loss_train, train_prediction], feed_dict=feed_dict)
+        if (step % validate_per_step == 0):
+            print('Minibatch loss at step %d: %f' \
+                  % (step, l))
+            print('Minibatch accuracy: %.1f%%' \
+                  % accuracy(predictions, batch_labels))
+            print('Validation accuracy: %.1f%%' \
+                  % accuracy(
+                          valid_prediction.eval(
+                              feed_dict = {x : valid_dataset}), 
+                              valid_labels))
+              
+    return sess
+              
+#%%
 print('Test accuracy: %.1f%%' % accuracy(
-  valid_prediction.eval(
-    feed_dict = {x : test_dataset}), test_labels))
+    valid_prediction.eval(
+        feed_dict = {x : test_dataset}), test_labels))
