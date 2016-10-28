@@ -31,6 +31,16 @@ import import_mhd as mhd
 cands_pos = annot.cands_pos
 cands_neg = annot.cands_neg
 
+# Set aside test set
+subset_test = 9
+in_pos_test = cands_pos.subset.isin([subset_test])
+in_neg_test = cands_neg.subset.isin([subset_test])
+ix_pos_test = np.nonzero(in_pos_test)
+ix_neg_test = np.nonzero(in_neg_test)
+ix_pos_train_valid = np.nonzero(~in_pos_test)
+ix_neg_train_valid = np.nonzero(~in_neg_test)
+
+#%%
 subset_incl_pos = np.arange(9)
 subset_incl_neg = np.array([0])
 
@@ -54,6 +64,12 @@ cands_all = pd.concat((cands_pos, cands_neg), axis=0)
 n_all = len(cands_all)
 
 #%% Load dataset
+def load_data(cands, ix_incl, ix_st, n_incl, is_pos, scale_incl=[0]):
+    n_cands = len(cands)
+    ix_incl1 = ix_incl[np.mod(ix_st + np.arange(n_incl), n_cands)]
+    load_cand(cands.iloc[ix_incl1,:], scale_incl=scale_incl)
+    pass
+
 def load_cand(cands, scale=0):
     
     t_st = time.time()
@@ -120,6 +136,45 @@ def load_cand(cands, scale=0):
 img_neg, label_neg, ix_loaded_neg = load_cand(cands_neg.iloc[:,:])
 img_pos, label_pos, ix_loaded_pos = load_cand(cands_pos.iloc[:,:])
 
+#%% 
+def augment_pos(cands_pos1, img_pos1, scale=0):
+    
+    radius_vox = cands_pos1.radius / mhd.output_formats[scale]
+    dx, dy, dz = samp_sphere(radius_vox)
+    dx = np.fix(dx)
+    dy = np.fix(dy)
+    dz = np.fix(dz)
+    
+    n_cands = len(cands_pos1)
+    img_size = img_neg.shape[1]
+    img_pos_aug = np.zeros([n_cands] + [img_size] * 3)
+    
+    for ii in n_cands:
+        pass # <-------------------WORKING HERE 
+    
+    return img_pos_aug
+
+def samp_sphere(R = 1):
+    # from http://stackoverflow.com/a/5408843/2565317
+    
+    if R is not np.array:
+        R = np.array(R)
+        
+    n = R.size
+    
+    phi = np.random.rand(n) * 2 * np.pi
+    costheta = np.random.rand(n) * 2 - 1
+    u = np.random.rand(n)
+    
+    theta = np.arccos( costheta )
+    r = R * u ** (1. / 3)
+    
+    x = r * np.sin(theta) * np.cos(phi)
+    y = r * np.sin(theta) * np.sin(phi)
+    z = r * np.cos(theta)
+    
+    return x, y, z
+    
 #%% Functions to build the network
 def accuracy(predictions, labels):
     return (100.0 * np.mean(predictions == labels))
@@ -290,8 +345,6 @@ def get_data(n_pos, n_neg):
     ix_train = ix_data[(n_test + n_validation):]
                        
     return dataset, labels
-    
-
     
 def init():                   
 #    #%% Start session
