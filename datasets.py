@@ -78,16 +78,20 @@ class Dataset(object):
         
     def get_sample(self, ix_samp):
         raise TypeError('get_sample must be modified in subclasses!')
+
+class DatasetNeg(Dataset):
+    # Load by subset?
+    def get_sample(self, ix_samp):
+        # TODO
         if self.is_loaded[ix_samp]:            
             self.imgs[ix_samp,:,:,:]
         else:
             pass # Load from disk
-
-class DatasetNeg(Dataset):
-    # Use cache and augment
-    pass
+        pass
             
 class DatasetPos(Dataset):
     # Augment by shift
-    pass
+    def get_sample(self, ix_samp):
+        # TODO
+        pass
 
