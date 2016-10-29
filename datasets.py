@@ -32,7 +32,9 @@ class Dataset(object):
         self.n_cands = len(self.cands)
         
         if is_pos is None:
-            is_pos = self.cands.is_pos[0]
+            self.is_pos = self.cands.is_pos[0]
+        else:
+            self.is_pos = is_pos
         
         self.prop_test = prop_test
         self.prop_valid = prop_valid
@@ -69,7 +71,8 @@ class Dataset(object):
     def get_test(self):
         if self.__imgs_test is None:
             # Load all
-            imgs_test = self.load_imgs(self.cands.iloc[self.ix_test,:])
+            imgs_test, _, _ = self.load_imgs(
+                    self.cands.iloc[self.ix_test,:])
             self.__imgs_test = imgs_test
         else:
             imgs_test = self.__imgs_test
@@ -114,7 +117,9 @@ class Dataset(object):
             if os.path.isfile(patch_file + '.zpkl'):
                 L = zipPickle.load(patch_file + '.zpkl')
                 n_loaded += 1
+                print('Loaded %s.zpkl' % patch_file)
             else:
+                print('Failed to find %s.zpkl' % patch_file)
                 continue
             
             if n_loaded == 1:
@@ -147,28 +152,39 @@ class Dataset(object):
             ix_loaded = None
     
         t_el = time.time() - t_st
-        print('Time elapsed: %1.2f sec / %d img = %1.2f msec/img' % 
-              (t_el, img_all.shape[0], t_el / img_all.shape[0] * 1e3))
+        if n_loaded == 0:
+            t_el_per_loaded_ms = np.nan
+        else:
+            t_el_per_loaded_ms = t_el / n_loaded * 1e3
             
-        print('Last image loaded:')
-        print(np.int32(ix_loaded[-1])) # DEBUG    
-#        patch1 = img_all[-1,img_all.shape[1]/2,:,:,0]
-#        plt.imshow(patch1, cmap='gray')
-#        plt.show()
+        print('Time elapsed: %1.2f sec / %d img = %1.2f msec/img' % 
+              (t_el, n_loaded, t_el_per_loaded_ms))
+        
+        if n_loaded > 0:
+            print('Last image loaded:')
+            print(np.int32(ix_loaded[-1])) # DEBUG    
+    #        patch1 = img_all[-1,img_all.shape[1]/2,:,:,0]
+    #        plt.imshow(patch1, cmap='gray')
+    #        plt.show()
         
         return img_all, label_all, ix_loaded
         
 class DatasetNeg(Dataset):
     # Preload parts
     def __init__(self, cands, 
+                 n_img_per_load = None,
                  max_memory_MB = 2000, 
                  max_n_reuse = 1,
                  **kwargs):
         Dataset.__init__(self, cands, **kwargs)
         
         self.max_memory_MB = max_memory_MB
-        self.n_img_per_load = np.round(self.max_memory_MB \
-                / (self.img_size_in ** 3 * 4 * 1e3))
+        if n_img_per_load is None:
+            self.n_img_per_load = np.round(
+                    self.max_memory_MB \
+                    / (self.img_size_in ** 3 * 4 * 1e3))
+        else:
+            self.n_img_per_load = n_img_per_load
         
         self.max_n_reuse = max_n_reuse
         self.curr_n_reuse = 0
@@ -177,7 +193,7 @@ class DatasetNeg(Dataset):
         self.ix_to_load = 0
         self.ix_to_read = 0
         
-        self.load_imgs()
+#        self.load_next_samples()
         
     def get_next_sample(self):
         self.ix_to_read += 1
@@ -198,16 +214,22 @@ class DatasetNeg(Dataset):
         while n_loaded < self.n_img_per_load:
             n_to_load = self.n_img_per_load - n_loaded
             ixs_to_load = self.ix_train_valid[
-                    np.mod(self.ix_to_load + np.arange(n_to_load), 
-                           self.n_train_valid)]
-            img_all1, labels1 = self.load_imgs(
+                    np.int32(
+                            np.mod(self.ix_to_load + np.arange(n_to_load), 
+                                   self.n_train_valid))]
+            img_all1, labels1, _ = self.load_imgs(
                     self.cands.iloc[ixs_to_load,:])
-            n_loaded1 = img_all1.size[0]
-            self.ix_to_load = np.mod(self.ix_to_load + n_to_load,
-                                     self.n_train_valid)
-            ix_loaded = n_loaded + np.arange(n_loaded1)
-            img_all[ix_loaded,:,:,:,:] = img_all1
-            labels[ix_loaded] = labels1
+            if img_all1 is None:
+                n_loaded1 = 0
+            else:
+                n_loaded1 = img_all1.size[0]
+                
+            if n_loaded1 > 0:
+                self.ix_to_load = np.mod(self.ix_to_load + n_to_load,
+                                         self.n_train_valid)
+                ix_loaded = n_loaded + np.arange(n_loaded1)
+                img_all[ix_loaded,:,:,:,:] = img_all1
+                labels[ix_loaded] = labels1
         
         self.n_used_aft_load = 0
         self.__imgs_train_valid = img_all
@@ -223,3 +245,15 @@ class DatasetPos(Dataset):
         # TODO
         pass
 
+    
+#%%
+def demo():
+    #%%
+    import datasets as ds
+    reload(ds)
+    ds_neg = ds.DatasetNeg(mhd.cands_neg[:5], n_img_per_load = 2)
+    return ds_neg
+    
+#%%
+if __name__ == '__main__':
+    demo()
