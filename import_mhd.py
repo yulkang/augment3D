@@ -101,6 +101,22 @@ output_formats = pd.DataFrame({'radius_min_incl': radius_min_incl,
                                'spacing_output_mm': spacings_output_mm,
                                'radius_out_per_in': radius_out_per_in})
 
+def output_format2size(output_format, is_pos, 
+                       margin=1):
+    if is_pos:
+        radius_mm = output_format['radius_max'] \
+                           * (output_format['radius_out_per_in'] \
+                              + margin)
+    else:
+        radius_mm = output_format['radius_max'] \
+                                 * output_format['radius_out_per_in']
+            
+    diameter_mm = radius_mm * 2
+    spacing_mm = output_format['spacing_output_mm']
+    diameter_vox = np.int32(diameter_mm / spacing_mm)
+    
+    return diameter_mm, diameter_vox
+
 #%% uid2meta - example
 def uid2mhd_file(uid):
     return os.path.join(img_dir, uid + '.mhd')
@@ -185,12 +201,7 @@ def cand_scale2patch_file(cand,
     print(cand) # DEBUG
     is_pos = cand['is_pos']
 
-    if is_pos:
-        max_radius = fmt['radius_max'] * (fmt['radius_out_per_in'] + 1)
-    else:
-        max_radius = fmt['radius_max'] * fmt['radius_out_per_in']
-            
-    diameter_mm = max_radius * 2
+    diameter_mm = output_format2size(fmt, is_pos)
     spacing_mm = fmt['spacing_output_mm']
         
     patch_file = cand2patch_file(cand, 
