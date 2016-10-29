@@ -96,7 +96,7 @@ class Dataset(object):
         raise TypeError(
                 'get_next_sample must be implemented in subclasses!')
         
-    def load_imgs(self, cands, scale=0):    
+    def load_imgs(self, cands):    
         t_st = time.time()
         
         n_cand = len(cands)
@@ -167,46 +167,51 @@ class DatasetNeg(Dataset):
         Dataset.__init__(self, cands, **kwargs)
         
         self.max_memory_MB = max_memory_MB
+        self.n_img_per_load = np.round(self.max_memory_MB \
+                / (self.img_size_in ** 3 * 4 * 1e3))
+        
         self.max_n_reuse = max_n_reuse
         self.curr_n_reuse = 0
         
-        self.n_used = np.zeros(self.n_train_valid, dtype=np.int32)
-        self.is_loaded = np.zeros(self.n_train_valid, dtype=np.bool)
-
-        self.ix_to_load_in_train_valid = None
-        self.ix_to_read_in_train_valid = None
+        self.n_used_aft_load = 0
+        self.ix_to_load = 0
+        self.ix_to_read = 0
         
-    def get_next_sample(self, scale):
-        if self.ix_to_read_in_train_valid is None:
-            self.load_next_samples(scale)
-            
+        self.load_imgs()
         
-            
-        ix_available = np.nonzero(self.is_loaded 
-                                  & (self.n_used < self.curr_n_reuse))[0]
-        if ix_available.size == 0:
-            if self.curr_n_reuse < self.max_n_reuse:
-                self.curr_n_reuse += 1
-                return self.get_next_sample(scale)
-            else:
-                pass # Load more
-        else:
-            pass # Retrieve from cache
+    def get_next_sample(self):
+        self.ix_to_read += 1
+        if self.ix_to_read == self.n_img_per_load:
+            self.ix_to_read = 0
+            self.n_used_aft_load += 1
+            if self.n_used_aft_load > self.max_n_reuse:
+                self.load_next_samples()
+                
+        return (self.__imgs_train_valid[self.ix_to_read,:,:,:,:],
+                self.__labels_train_valid[self.ix_to_read])
         
-        img1, label1 = self.get_sample(
-                self.ix_train_valid[self.curr_ix])
-        self.curr_ix += 1
-        if self.curr_ix == self.n_cands:
-            np.random.shuffle(self.ix_train_valid)
-            self.curr_ix = 0 # Loop around
+    def load_next_samples(self):
+        n_loaded = 0
+        img_all_size = [self.n_img_per_load] + [self.img_size_in] * 3 + [1]
+        img_all = np.zeros(img_all_size, dtype=np.float32)
+        labels = np.zeros(self.n_img_per_load, dtype=np.float32)
+        while n_loaded < self.n_img_per_load:
+            n_to_load = self.n_img_per_load - n_loaded
+            ixs_to_load = self.ix_train_valid[
+                    np.mod(self.ix_to_load + np.arange(n_to_load), 
+                           self.n_train_valid)]
+            img_all1, labels1 = self.load_imgs(
+                    self.cands.iloc[ixs_to_load,:])
+            n_loaded1 = img_all1.size[0]
+            self.ix_to_load = np.mod(self.ix_to_load + n_to_load,
+                                     self.n_train_valid)
+            ix_loaded = n_loaded + np.arange(n_loaded1)
+            img_all[ix_loaded,:,:,:,:] = img_all1
+            labels[ix_loaded] = labels1
         
-        if img1 is not None:
-            pass
-        
-        if self.is_loaded[self.ix_samp] and self.n_used[self.ix_samp]:
-            self.imgs[self.ix_samp,:,:,:]
-        else:
-            pass
+        self.n_used_aft_load = 0
+        self.__imgs_train_valid = img_all
+        self.__labels_train_valid = labels
             
 class DatasetPos(Dataset):
     # Load all on construction, augment by shift
