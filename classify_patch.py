@@ -136,45 +136,6 @@ def load_cand(cands, scale=0):
 img_neg, label_neg, ix_loaded_neg = load_cand(cands_neg.iloc[:,:])
 img_pos, label_pos, ix_loaded_pos = load_cand(cands_pos.iloc[:,:])
 
-#%% 
-def augment_pos(cands_pos1, img_pos1, scale=0):
-    
-    radius_vox = cands_pos1.radius / mhd.output_formats[scale]
-    dx, dy, dz = samp_sphere(radius_vox)
-    dx = np.fix(dx)
-    dy = np.fix(dy)
-    dz = np.fix(dz)
-    
-    n_cands = len(cands_pos1)
-    img_size = img_neg.shape[1]
-    img_pos_aug = np.zeros([n_cands] + [img_size] * 3)
-    
-    for ii in n_cands:
-        pass # <-------------------WORKING HERE 
-    
-    return img_pos_aug
-
-def samp_sphere(R = 1):
-    # from http://stackoverflow.com/a/5408843/2565317
-    
-    if R is not np.array:
-        R = np.array(R)
-        
-    n = R.size
-    
-    phi = np.random.rand(n) * 2 * np.pi
-    costheta = np.random.rand(n) * 2 - 1
-    u = np.random.rand(n)
-    
-    theta = np.arccos( costheta )
-    r = R * u ** (1. / 3)
-    
-    x = r * np.sin(theta) * np.cos(phi)
-    y = r * np.sin(theta) * np.sin(phi)
-    z = r * np.cos(theta)
-    
-    return x, y, z
-    
 #%% Functions to build the network
 def accuracy(predictions, labels):
     return (100.0 * np.mean(predictions == labels))
