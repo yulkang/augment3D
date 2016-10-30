@@ -32,7 +32,7 @@ class Dataset(object):
         self.n_cands = len(self.cands)
         
         if is_pos is None:
-            self.is_pos = self.cands.is_pos[0]
+            self.is_pos = self.cands.is_pos.iloc[0]
         else:
             self.is_pos = is_pos
         
@@ -117,7 +117,8 @@ class Dataset(object):
             if os.path.isfile(patch_file + '.zpkl'):
                 L = zipPickle.load(patch_file + '.zpkl')
                 n_loaded += 1
-                print('Loaded %s.zpkl' % patch_file)
+                print('Loaded %d (%d/%d successful): %s.zpkl' % 
+                      (i_cand, n_loaded, n_cand, patch_file))
             else:
                 print('Failed to find %s.zpkl' % patch_file)
                 continue
@@ -222,7 +223,7 @@ class DatasetNeg(Dataset):
             if img_all1 is None:
                 n_loaded1 = 0
             else:
-                n_loaded1 = img_all1.size[0]
+                n_loaded1 = img_all1.shape[0]
                 
             if n_loaded1 > 0:
                 self.ix_to_load = np.mod(self.ix_to_load + n_to_load,
@@ -230,6 +231,10 @@ class DatasetNeg(Dataset):
                 ix_loaded = n_loaded + np.arange(n_loaded1)
                 img_all[ix_loaded,:,:,:,:] = img_all1
                 labels[ix_loaded] = labels1
+                n_loaded += n_loaded1
+                
+            print(img_all1.shape)
+            print('n_loaded/n_to_load: %d/%d' % (n_loaded, n_to_load))
         
         self.n_used_aft_load = 0
         self.__imgs_train_valid = img_all

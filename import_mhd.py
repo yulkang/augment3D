@@ -198,10 +198,10 @@ uid2patch.uid_prev = None
 def cand_scale2patch_file(cand, 
                           output_format=output_formats.iloc[0,:]):
     fmt = output_format
-    print(cand) # DEBUG
+#    print(cand) # DEBUG
     is_pos = cand['is_pos']
 
-    diameter_mm = output_format2size(fmt, is_pos)
+    diameter_mm, _ = output_format2size(fmt, is_pos)
     spacing_mm = fmt['spacing_output_mm']
         
     patch_file = cand2patch_file(cand, 
@@ -287,7 +287,7 @@ def cand2patch(cand, img_np=None, origin_mm=None, spacing_input_mm=None,
     else:
         diameter_mm = -1
                          
-    print(cand)
+#    print(cand)
 #    print(grid0_mm)
 #    print(grid_mm.shape)
 #    print(grid_mm)
