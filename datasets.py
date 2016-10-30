@@ -38,7 +38,7 @@ class Dataset(object):
         
         self.prop_test = prop_test
         self.prop_valid = prop_valid
-        self.n_test = np.ceil(self.n_cands * self.prop_test)
+        self.n_test = np.int32(np.ceil(self.n_cands * self.prop_test))
         self.n_train_valid = self.n_cands - self.n_test
         
         self.ix = np.arange(self.n_cands)
@@ -60,7 +60,7 @@ class Dataset(object):
         self.__imgs_test = None
         
     def get_train_valid(self, n_samp):
-        n_valid = np.ceil(n_samp * self.prop_valid)
+        n_valid = np.int32(np.ceil(n_samp * self.prop_valid))
         n_train = n_samp - n_valid
         
         imgs_valid, labels_valid = self.get_samples(n_valid)
@@ -81,7 +81,7 @@ class Dataset(object):
         return imgs_test, labels_test
 
     def get_samples(self, n_samp):
-        imgs = np.zeros([n_samp] + [self.img_size] * 3 + [1], 
+        imgs = np.zeros([n_samp] + [self.img_size_out] * 3 + [1], 
                         dtype=np.float32)
         labels = np.zeros(n_samp, 
                           dtype=np.float32)
@@ -113,7 +113,7 @@ class Dataset(object):
             cand = cands.iloc[i_cand,:]
             patch_file, _, _ = mhd.cand_scale2patch_file(
                     cand, 
-                    output_format=mhd.output_formats.iloc[0,:])
+                    output_format=self.output_format)
             if os.path.isfile(patch_file + '.zpkl'):
                 L = zipPickle.load(patch_file + '.zpkl')
                 n_loaded += 1
@@ -244,6 +244,8 @@ class DatasetPos(Dataset):
     # Load all on construction, augment by shift
     def __init(self, cands,
                **kwargs):
+        Dataset.__init__(self, cands, **kwargs)
+        
         pass
     
     def get_sample(self, ix_samp):
