@@ -20,8 +20,9 @@ from pysy import zipPickle
 import compare_cand_vs_annot as annot
 import import_mhd as mhd
 
-#%%
+#%% Class
 class Dataset(object):
+    #%% Initialization
     def __init__(self, cands,
                  is_pos = None,
                  scale = 0,
@@ -46,7 +47,7 @@ class Dataset(object):
                 self.output_format, False)
 
         # Filter cands
-        self.cands = self.filter_cands(self.cands)
+        self.cands = self._filter_cands(self.cands)
         
         self.n_cands = len(self.cands)
         self.n_test = np.int32(np.ceil(self.n_cands * self.prop_test))
@@ -63,22 +64,26 @@ class Dataset(object):
         # Cache test images.
         self.imgs_test = None
         
-    def fileter_cands(self, cands):
+    def _filter_cands(self, cands):
         return cands # Implement in subclasses
         
+    #%% Retrieval - Interface
     def get_train_valid(self, n_samp):
         n_valid = np.int32(np.ceil(n_samp * self.prop_valid))
         n_train = n_samp - n_valid
         
-        imgs_valid, labels_valid = self.get_samples(n_valid)
-        imgs_train, labels_train = self.get_samples(n_train)
+        print('n_valid: %d' % n_valid)
+        print('n_train: %d' % n_train)
+        
+        imgs_valid, labels_valid = self._get_samples(n_valid)
+        imgs_train, labels_train = self._get_samples(n_train)
         
         return imgs_train, labels_train, imgs_valid, labels_valid
         
     def get_test(self):
         if self.imgs_test is None:
             # Load all
-            imgs_test, _, _ = self.load_imgs(
+            imgs_test, _, _ = self._load_imgs(
                     self.cands.iloc[self.ix_test,:])
             self.imgs_test = imgs_test
         else:
@@ -87,14 +92,18 @@ class Dataset(object):
         labels_test = self.labels[self.ix_test]
         return imgs_test, labels_test
 
-    def get_samples(self, n_samp):
+    #%% Retrieval - Internal
+    def _get_samples(self, n_samp):
+        
+        print('get_samples(%d)' % n_samp)
+        
         imgs = np.zeros([n_samp] + [self.img_size_out] * 3 + [1], 
                         dtype=np.float32)
         labels = np.zeros(n_samp, 
                           dtype=np.float32)
         n_retrieved = 0
         for n_retrieved in range(n_samp):
-            img1, label1 = self.get_next_sample()
+            img1, label1 = self._get_next_sample()
             
             print('img1.shape:')
             print(img1.shape)
@@ -107,11 +116,11 @@ class Dataset(object):
         
         return imgs, labels
         
-    def get_next_sample(self):
+    def _get_next_sample(self):
         raise TypeError(
-                'get_next_sample must be implemented in subclasses!')
+                '_get_next_sample must be implemented in subclasses!')
         
-    def load_imgs(self, cands):    
+    def _load_imgs(self, cands):    
         t_st = time.time()
         
         n_cand = len(cands)
@@ -206,20 +215,20 @@ class DatasetNeg(Dataset):
         self.ix_to_load = 0
         self.ix_to_read = 0
         
-#        self.load_next_samples()
+#        self._load_next_samples()
         
-    def get_next_sample(self):
+    def _get_next_sample(self):
         self.ix_to_read += 1
         if self.ix_to_read == self.n_img_per_load:
             self.ix_to_read = 0
             self.n_used_aft_load += 1
             if self.n_used_aft_load > self.max_n_reuse:
-                self.load_next_samples()
+                self._load_next_samples()
                 
         return (self.imgs_train_valid[self.ix_to_read,:,:,:,:],
                 self.labels_train_valid[self.ix_to_read])
         
-    def load_next_samples(self):
+    def _load_next_samples(self):
         n_loaded = 0
         img_all_size = [self.n_img_per_load] + [self.img_size_in] * 3 + [1]
         img_all = np.zeros(img_all_size, dtype=np.float32)
@@ -230,7 +239,7 @@ class DatasetNeg(Dataset):
                     np.int32(
                             np.mod(self.ix_to_load + np.arange(n_to_load), 
                                    self.n_train_valid))]
-            img_all1, labels1, _ = self.load_imgs(
+            img_all1, labels1, _ = self._load_imgs(
                     self.cands.iloc[ixs_to_load,:])
             if img_all1 is None:
                 n_loaded1 = 0
@@ -259,7 +268,7 @@ class DatasetPos(Dataset):
         Dataset.__init__(self, cands, **kwargs)
         
         self.imgs_train_valid0, self.labels_train_valid, _ = \
-                self.load_imgs(self.cands.iloc[self.ix_train_valid,:])
+                self._load_imgs(self.cands.iloc[self.ix_train_valid,:])
                 
         self.radius = self.cands.radius
         self.spacing_output_mm = self.output_format.spacing_output_mm
@@ -269,8 +278,7 @@ class DatasetPos(Dataset):
                 
         self.ix_to_read = 0
             
-    def filter_cands(self, cands):
-        # WORKING HERE #######################
+    def _filter_cands(self, cands):
         radius_min_incl = self.output_format.radius_min_incl
         radius_max_incl = self.output_format.radius_max_incl
         radius = np.float32(self.cands.radius)
@@ -280,12 +288,12 @@ class DatasetPos(Dataset):
         
         return cands
         
-    def get_next_sample(self):
+    def _get_next_sample(self):
         self.ix_to_read = np.mod(self.ix_to_read + 1, self.n_train_valid)
         ix1 = self.ix_train_valid[self.ix_to_read]
         
         radius_vox = self.radius[ix1] / self.spacing_output_mm
-        dx, dy, dz = self.samp_sphere(radius_vox)
+        dx, dy, dz = self._samp_sphere(radius_vox)
         x = np.int32(np.fix(dx)) + self.ix_vox
         y = np.int32(np.fix(dy)) + self.ix_vox
         z = np.int32(np.fix(dz)) + self.ix_vox
@@ -297,10 +305,10 @@ class DatasetPos(Dataset):
         print(y)
         print(z)
                     
-        return (self.imgs_train_valid0[ix1, x, y, z, 0],
+        return (self.imgs_train_valid0[np.ix_(ix1, x, y, z, 0)],
                 self.labels[ix1])
     
-    def samp_sphere(self, radius = 1):
+    def _samp_sphere(self, radius = 1):
         # from http://stackoverflow.com/a/5408843/2565317
         
         if radius is not np.array:
@@ -334,10 +342,11 @@ def demo():
     #%% Test ds_pos
     import datasets as ds
     reload(ds)
-    ds_pos = ds.DatasetPos(mhd.cands_pos[:10], n_img_per_load = 10)
+    ds_pos = ds.DatasetPos(mhd.cands_pos[:100], n_img_per_load = 50)
     
+    #%%
     imgs_train, labels_train, imgs_valid, labels_valid = \
-            ds_pos.get_train_valid(9)
+            ds_pos.get_train_valid(10)
     
 #%%
 if __name__ == '__main__':
