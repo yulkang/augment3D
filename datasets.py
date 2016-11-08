@@ -205,6 +205,11 @@ class Dataset(object):
                 
         if img_all is not None:
             img_all = img_all[:n_loaded,:,:,:]
+            
+            print(img_all.shape)
+            print(siz)
+            siz[0] = n_loaded
+            
             img_all = img_all.reshape(np.concatenate((siz,[1])))
             ix_loaded = ix_loaded[:n_loaded]
             ix_loaded = cands.index[ix_loaded]
@@ -255,7 +260,7 @@ class DatasetNeg(Dataset):
         self.ix_to_load = 0
         self.ix_to_read = -1
         
-        # self._load_next_samples()
+        self._load_next_samples()
         
     def _get_next_sample(self):
         self.ix_to_read += 1
@@ -386,7 +391,11 @@ def demo():
     #%% Test ds_neg
     import datasets as ds
     reload(ds)
-    ds_neg = ds.DatasetNeg(mhd.cands_neg[:50], n_img_per_load = 50)
+    cands_neg = mhd.cands_neg
+    cands_neg = cands_neg.ix[cands_neg.subset.isin([0])]
+    
+    #%%
+    ds_neg = ds.DatasetNeg(cands_neg, n_img_per_load = 50)
     
     #%%
     imgs_train, labels_train, imgs_valid, labels_valid = \
@@ -395,7 +404,7 @@ def demo():
     #%% Test ds_pos
     import datasets as ds
     reload(ds)
-    ds_pos = ds.DatasetPos(mhd.cands_pos[:50], n_img_per_load = 50)
+    ds_pos = ds.DatasetPos(mhd.cands_pos[:100], n_img_per_load = 50)
     
     imgs_train, labels_train, imgs_valid, labels_valid = \
             ds_pos.get_train_valid(10)
