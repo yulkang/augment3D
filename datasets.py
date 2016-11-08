@@ -412,8 +412,10 @@ def demo():
     #%% Test ds_pos_neg
     import datasets as ds
     reload(ds)
-    ds_all = ds.DatasetPosNeg(mhd.cands_pos[:100], mhd.cands_neg[:100],
-                              n_img_per_load = 100)
+    cands_neg = mhd.cands_neg
+    cands_neg = cands_neg.ix[cands_neg.subset.isin([0])]
+    ds_all = ds.DatasetPosNeg(mhd.cands_pos[:100], cands_neg,
+                              n_img_per_load = 50)
     
     imgs_train, labels_train, imgs_valid, labels_valid = \
             ds_all.get_train_valid(20)
