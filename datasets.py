@@ -21,6 +21,46 @@ import compare_cand_vs_annot as annot
 import import_mhd as mhd
 
 #%% Class
+class DatasetPosNeg(object):
+    #%% Initialization
+    def __init__(self, cands_pos, cands_neg, 
+               prop_pos = 0.5,
+               pos_args = {},
+               neg_args = {},
+               **kwargs):
+        # Give common arguments as kwargs. 
+        # pos_args and neg_args overwrites kwargs.
+        
+        self.prop_pos = prop_pos
+        
+        pos_args1 = kwargs.copy()
+        pos_args1.update(pos_args)
+        
+        neg_args1 = kwargs.copy()
+        neg_args1.update(neg_args)
+
+        self.ds_pos = DatasetPos(cands_pos, **pos_args1)
+        self.ds_neg = DatasetNeg(cands_neg, **neg_args1)
+        
+    def get_train_valid(self, n_samp):
+        # n_samp should be the size of a minibatch,
+        # from which the gradient is calculated.
+        # The order of positive and negative samples is not randomized!
+        
+        n_pos = np.int32(np.ceil(n_samp * self.prop_pos))
+        n_neg = n_samp - n_pos
+        
+        imgs_train_pos, labels_train_pos, imgs_valid_pos, labels_valid_pos = \
+                self.ds_pos.get_train_valid(n_pos)
+                
+        imgs_train_neg, labels_train_neg, imgs_valid_neg, labels_valid_neg = \
+                self.ds_neg.get_train_valid(n_neg)
+        
+        return np.concatenate((imgs_train_pos, imgs_train_neg)), \
+               np.concatenate((labels_train_pos, labels_train_neg)), \
+               np.concatenate((imgs_valid_pos, imgs_valid_neg)), \
+               np.concatenate((labels_valid_pos, labels_valid_neg))
+
 class Dataset(object):
     #%% Initialization
     def __init__(self, cands,
@@ -213,9 +253,9 @@ class DatasetNeg(Dataset):
         
         self.n_used_aft_load = 0
         self.ix_to_load = 0
-        self.ix_to_read = 0
+        self.ix_to_read = -1
         
-#        self._load_next_samples()
+        # self._load_next_samples()
         
     def _get_next_sample(self):
         self.ix_to_read += 1
@@ -253,8 +293,8 @@ class DatasetNeg(Dataset):
                 img_all[ix_loaded,:,:,:,:] = img_all1
                 labels[ix_loaded] = labels1
                 n_loaded += n_loaded1
+                print(img_all1.shape)
                 
-            print(img_all1.shape)
             print('n_loaded/n_to_load: %d/%d' % (n_loaded, n_to_load))
         
         self.n_used_aft_load = 0
@@ -276,7 +316,7 @@ class DatasetPos(Dataset):
               + np.arange(self.img_size_out) \
               - self.img_size_out / 2
                 
-        self.ix_to_read = 0
+        self.ix_to_read = -1
             
     def _filter_cands(self, cands):
         radius_min_incl = self.output_format.radius_min_incl
@@ -290,9 +330,9 @@ class DatasetPos(Dataset):
         
     def _get_next_sample(self):
         self.ix_to_read = np.mod(self.ix_to_read + 1, self.n_train_valid)
-        ix1 = self.ix_train_valid[self.ix_to_read]
+        ix1 = self.ix_to_read # shuffle happened in __init__
         
-        radius_vox = self.radius[ix1] / self.spacing_output_mm
+        radius_vox = self.radius.iloc[ix1] / self.spacing_output_mm
         dx, dy, dz = self._samp_sphere(radius_vox)
         x = np.int32(np.fix(dx)) + self.ix_vox
         y = np.int32(np.fix(dy)) + self.ix_vox
@@ -304,9 +344,14 @@ class DatasetPos(Dataset):
         print(x)
         print(y)
         print(z)
+        print('ix:')
+        print(ix1)
+        print('ix_img:')
+        ix_img = np.ix_(np.array([ix1]),x,y,z,np.array([0]))
+        print(ix_img)
                     
-        return (self.imgs_train_valid0[np.ix_(ix1, x, y, z, 0)],
-                self.labels[ix1])
+        return (self.imgs_train_valid0[ix_img],
+                self.labels.iloc[ix1])
     
     def _samp_sphere(self, radius = 1):
         # from http://stackoverflow.com/a/5408843/2565317
@@ -328,26 +373,42 @@ class DatasetPos(Dataset):
         z = r * np.cos(theta)
         
         return x, y, z
-    
+   
+#%%
+def demo_kwargs(args1, **kwargs):
+    args1 = args1.copy()
+    print(args1)
+    args1.update(kwargs)
+    print(args1)
+        
 #%%
 def demo():
     #%% Test ds_neg
     import datasets as ds
     reload(ds)
-    ds_neg = ds.DatasetNeg(mhd.cands_neg[:10], n_img_per_load = 10)
+    ds_neg = ds.DatasetNeg(mhd.cands_neg[:50], n_img_per_load = 50)
     
+    #%%
     imgs_train, labels_train, imgs_valid, labels_valid = \
-            ds_pos.get_train_valid(9)
+            ds_neg.get_train_valid(10)
 
     #%% Test ds_pos
     import datasets as ds
     reload(ds)
-    ds_pos = ds.DatasetPos(mhd.cands_pos[:100], n_img_per_load = 50)
+    ds_pos = ds.DatasetPos(mhd.cands_pos[:50], n_img_per_load = 50)
     
-    #%%
     imgs_train, labels_train, imgs_valid, labels_valid = \
             ds_pos.get_train_valid(10)
     
+    #%% Test ds_pos_neg
+    import datasets as ds
+    reload(ds)
+    ds_all = ds.DatasetPosNeg(mhd.cands_pos[:100], mhd.cands_neg[:100],
+                              n_img_per_load = 100)
+    
+    imgs_train, labels_train, imgs_valid, labels_valid = \
+            ds_all.get_train_valid(20)
+            
 #%%
 if __name__ == '__main__':
     demo()
