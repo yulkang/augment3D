@@ -26,115 +26,11 @@ from pysy import zipPickle
 import compare_cand_vs_annot as annot
 import import_mhd as mhd
 
+import datasets
+
 #%% Choose train and test datasets
-# Train: All positive in the subset + 3x negative (random subset)
-cands_pos = annot.cands_pos
-cands_neg = annot.cands_neg
-
-# Set aside test set
-subset_test = 9
-in_pos_test = cands_pos.subset.isin([subset_test])
-in_neg_test = cands_neg.subset.isin([subset_test])
-ix_pos_test = np.nonzero(in_pos_test)
-ix_neg_test = np.nonzero(in_neg_test)
-ix_pos_train_valid = np.nonzero(~in_pos_test)
-ix_neg_train_valid = np.nonzero(~in_neg_test)
-
-#%%
-subset_incl_pos = np.arange(9)
-subset_incl_neg = np.array([0])
-
-scale_incl = 0
-fmt = mhd.output_formats.iloc[scale_incl,:]
-scale_incl_pos = (cands_pos.loc[:,'radius'] >= fmt['radius_min_incl']) \
-               & (cands_pos.loc[:,'radius'] < fmt['radius_max_incl'])
-
-cands_pos = cands_pos.ix[cands_pos.subset.isin(subset_incl_pos) \
-                         & scale_incl_pos,:]
-cands_neg = cands_neg.ix[cands_neg.subset.isin(subset_incl_neg),:]
-
-n_pos = len(cands_pos)
-memory_available_MB = 1000
-memory_per_cand_neg_MB = 0.5
-n_neg = np.int32(np.min((memory_available_MB / memory_per_cand_neg_MB, 
-                len(cands_neg))))
-
-cands_neg = cands_neg.iloc[:n_neg,:]
-cands_all = pd.concat((cands_pos, cands_neg), axis=0)
-n_all = len(cands_all)
-
-#%% Load dataset
-def load_data(cands, ix_incl, ix_st, n_incl, is_pos, scale_incl=[0]):
-    n_cands = len(cands)
-    ix_incl1 = ix_incl[np.mod(ix_st + np.arange(n_incl), n_cands)]
-    load_cand(cands.iloc[ix_incl1,:], scale_incl=scale_incl)
-    pass
-
-def load_cand(cands, scale=0):
-    
-    t_st = time.time()
-    
-    n_cand = len(cands)
-    n_loaded = 0
-    print('Loading %d candidates' % n_cand)
-    
-    ix_loaded = np.zeros((n_cand), dtype=np.int32)
-    img_all = None
-    
-    for i_cand in range(n_cand):
-        cand = cands.iloc[i_cand,:]
-        patch_file, _, _ = mhd.cand_scale2patch_file(
-                cand, 
-                output_format=mhd.output_formats.iloc[0,:])
-        if os.path.isfile(patch_file + '.zpkl'):
-            L = zipPickle.load(patch_file + '.zpkl')
-            n_loaded += 1
-        else:
-            continue
-        
-        if n_loaded == 1:
-            siz = np.concatenate(([n_cand], L['img'].shape))
-            img_all = np.zeros(siz, dtype=np.float32)
-            siz1 = siz.copy()
-            siz1[0] = 1
-            print('Loading images of size:')
-            print(L['img'].shape)
-            
-        try:
-            img_all[n_loaded-1,:,:,:] = np.reshape(L['img'], siz1)
-        except ValueError as err:
-            n_loaded -= 1
-            warnings.warn(err.message)
-            print('Potential shape discrepancy:')
-            print(L['img'].shape)
-            continue
-            
-        ix_loaded[n_loaded-1] = i_cand
-            
-    if img_all is not None:
-        img_all = img_all[:n_loaded,:,:,:]
-        img_all = img_all.reshape(np.concatenate((siz,[1])))
-        ix_loaded = ix_loaded[:n_loaded]
-        ix_loaded = cands.index[ix_loaded]
-        label_all = cands.loc[ix_loaded,'is_pos']
-    else:
-        label_all = None
-        ix_loaded = None
-
-    t_el = time.time() - t_st
-    print('Time elapsed: %1.2f sec / %d img = %1.2f msec/img' % 
-          (t_el, img_all.shape[0], t_el / img_all.shape[0] * 1e3))
-        
-    print('Last image loaded:')
-    print(np.int32(ix_loaded[-1])) # DEBUG    
-    patch1 = img_all[-1,img_all.shape[1]/2,:,:,0]
-    plt.imshow(patch1, cmap='gray')
-    plt.show()
-    
-    return img_all, label_all, ix_loaded
-
-img_neg, label_neg, ix_loaded_neg = load_cand(cands_neg.iloc[:,:])
-img_pos, label_pos, ix_loaded_pos = load_cand(cands_pos.iloc[:,:])
+reload(datasets)
+ds = datasets.get_dataset()
 
 #%% Functions to build the network
 def accuracy(predictions, labels):
@@ -191,9 +87,9 @@ def add_dense(inp, depth_out,
     return dense
 
 #%% Settings
-img_size = img_neg.shape[1]
+img_size = ds.ds_pos.img_size_out
 
-n_labels = 2
+n_labels = 1
 n_chan = 1 # grayscale
 batch_size = 128 # 16
 patch_size = 4
@@ -281,71 +177,57 @@ valid_prediction = tf.nn.softmax(logits)
 # Optimizer
 optimizer = tf.train.GradientDescentOptimizer(0.05).minimize(loss_train)
 
-#%% Prepare datasets
-prop_test = 0.1
-prop_validation = 0.1
-n_data = n_pos + n_neg
-n_test = np.int32(n_data * prop_test)
-n_validation = np.int32(n_data * prop_validation)
-n_train = n_data - n_test - n_validation
-
-def reformat(dataset, labels):
-    dataset = dataset.reshape(
-        [-1] + [img_size] * 3 + [n_chan]).astype(np.float32)
-    labels = (np.arange(n_labels) == labels[:,None]).astype(np.float32)
-    return dataset, labels
-
-def get_data(n_pos, n_neg):
-    # Load further data for negative examples.
-    # Generate further data for positive examples.
-    
-    ix_data = np.arange(n_data)
-    np.random.shuffle(ix_data)
-    ix_test = ix_data[:n_test]
-    ix_validation = ix_data[n_test:(n_test + n_validation)]
-    ix_train = ix_data[(n_test + n_validation):]
-                       
-    return dataset, labels
-    
-def init():                   
-#    #%% Start session
-#    if 'sess' in vars():
-#        sess.close()
+#%% Start session
+if 'sess' in vars():
+    sess.close()
         
-    sess = tf.InteractiveSession()
-    
-    # Begin session
-    sess.run(tf.initialize_all_variables())
-    print('Initialized')
-    step = 0
-    
-    return sess, step
+sess = tf.InteractiveSession()
+
+# Begin session
+sess.run(tf.initialize_all_variables())
+print('Initialized')
+step = 0
     
 #%%
+max_num_steps = 10
+num_steps = 5 # 3000 steps give test accuracy 91.5%
+validate_per_step = 1
+
+accu_valid_prev = -1
+accu_valid = 0
+
+batch_size = 100
+
+def colvec(v):
+    return np.reshape(v, [-1,1])
+
+#%%
+while (step < max_num_steps) \
+    and ((step == 0) or (accu_valid > accu_valid_prev)):
     
-    for step1 in range(n_steps):
+    accu_valid_prev = accu_valid
+    
+    for step1 in range(num_steps):
         step += 1
-      
-        offset = (step * batch_size) % (train_labels.shape[0] - batch_size)
-        batch_data = train_dataset[offset:(offset + batch_size), :, :, :]
-        batch_labels = train_labels[offset:(offset + batch_size), :]
-        feed_dict = {x : batch_data, y : batch_labels}
+        
+        imgs_train, labels_train, imgs_valid, labels_valid = \
+            ds.get_train_valid(batch_size)
+        
+        feed_dict = {x: imgs_train, y: colvec(labels_train)}
         _, l, predictions = sess.run(
             [optimizer, loss_train, train_prediction], feed_dict=feed_dict)
         if (step % validate_per_step == 0):
             print('Minibatch loss at step %d: %f' \
                   % (step, l))
             print('Minibatch accuracy: %.1f%%' \
-                  % accuracy(predictions, batch_labels))
+                  % accuracy(predictions, colvec(labels_train)))
             print('Validation accuracy: %.1f%%' \
                   % accuracy(
                           valid_prediction.eval(
-                              feed_dict = {x : valid_dataset}), 
-                              valid_labels))
-              
-    return sess
+                              feed_dict = {x : imgs_valid}), 
+                              colvec(labels_valid)))
               
 #%%
 print('Test accuracy: %.1f%%' % accuracy(
     valid_prediction.eval(
-        feed_dict = {x : test_dataset}), test_labels))
+        feed_dict = {x : test_dataset}), colvec(test_labels)))

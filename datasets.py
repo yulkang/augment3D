@@ -243,6 +243,7 @@ class DatasetNeg(Dataset):
                  max_memory_MB = 2000, 
                  max_n_reuse = 1,
                  **kwargs):
+        
         Dataset.__init__(self, cands, **kwargs)
         
         self.max_memory_MB = max_memory_MB
@@ -343,17 +344,17 @@ class DatasetPos(Dataset):
         y = np.int32(np.fix(dy)) + self.ix_vox
         z = np.int32(np.fix(dz)) + self.ix_vox
         
-        print('dx, dy, dz:')
-        print((dx, dy, dz))
-        print('x,y,z:')
-        print(x)
-        print(y)
-        print(z)
-        print('ix:')
-        print(ix1)
-        print('ix_img:')
+#        print('dx, dy, dz:')
+#        print((dx, dy, dz))
+#        print('x,y,z:')
+#        print(x)
+#        print(y)
+#        print(z)
+#        print('ix:')
+#        print(ix1)
         ix_img = np.ix_(np.array([ix1]),x,y,z,np.array([0]))
-        print(ix_img)
+#        print('ix_img:')
+#        print(ix_img)
                     
         return (self.imgs_train_valid0[ix_img],
                 self.labels.iloc[ix1])
@@ -386,35 +387,45 @@ def demo_kwargs(args1, **kwargs):
     args1.update(kwargs)
     print(args1)
         
+    
+#%%
+def get_dataset():
+    import datasets
+    reload(datasets)
+    cands_neg = mhd.cands_neg
+    cands_neg = cands_neg.ix[cands_neg.subset.isin([0])]
+    return datasets.DatasetPosNeg(mhd.cands_pos, cands_neg,
+                              n_img_per_load = 1000)
+    
 #%%
 def demo():
     #%% Test ds_neg
-    import datasets as ds
-    reload(ds)
+    import datasets
+    reload(datasets)
     cands_neg = mhd.cands_neg
     cands_neg = cands_neg.ix[cands_neg.subset.isin([0])]
     
     #%%
-    ds_neg = ds.DatasetNeg(cands_neg, n_img_per_load = 50)
+    ds_neg = datasets.DatasetNeg(cands_neg, n_img_per_load = 50)
     
     #%%
     imgs_train, labels_train, imgs_valid, labels_valid = \
             ds_neg.get_train_valid(10)
 
     #%% Test ds_pos
-    import datasets as ds
-    reload(ds)
-    ds_pos = ds.DatasetPos(mhd.cands_pos[:100], n_img_per_load = 50)
+    import datasets
+    reload(datasets)
+    ds_pos = datasets.DatasetPos(mhd.cands_pos[:100], n_img_per_load = 50)
     
     imgs_train, labels_train, imgs_valid, labels_valid = \
             ds_pos.get_train_valid(10)
     
     #%% Test ds_pos_neg
-    import datasets as ds
-    reload(ds)
+    import datasets
+    reload(datasets)
     cands_neg = mhd.cands_neg
     cands_neg = cands_neg.ix[cands_neg.subset.isin([0])]
-    ds_all = ds.DatasetPosNeg(mhd.cands_pos[:100], cands_neg,
+    ds_all = datasets.DatasetPosNeg(mhd.cands_pos[:100], cands_neg,
                               n_img_per_load = 50)
     
     imgs_train, labels_train, imgs_valid, labels_valid = \
