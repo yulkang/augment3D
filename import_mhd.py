@@ -19,8 +19,10 @@ from PIL import Image
 import matplotlib.pyplot as plt
 import pandas as pd
 import warnings
+
 import compare_cand_vs_annot as annot
 from pysy.stat import ecdf
+import paths
 
 #%% Define functions
 def load_itk_image(filename):
@@ -61,20 +63,6 @@ def normalizePlanes(npzarray):
     npzarray[npzarray<0] = 0.
     return npzarray
     
-#%% Paths
-cand_file = '../Data/LUNA/candidates.csv'
-annotation_file = '../Data/LUNA/annotations.csv'
-cand_out_file = '../Data/LUNA/candidates_vs_annot.csv'
-uid_subset_file = '../Data/LUNA/uid_subset.csv'
-
-#img_dir = '../Data/LUNA/image'
-img_dir = '/Volumes/YK_SSD_1TB/LUNA/all'
-#patch_dir = '../Data/patches/'
-patch_dir = '/Volumes/YK_SSD_1TB/LUNA/patches'
-
-subset_file = '../Data/LUNA/uid_subset.csv'
-meta_file = '../Data/LUNA/img_meta.csv'
-
 ## an example uid that is in subset0
 #uid0 = '1.3.6.1.4.1.14519.5.2.1.6279.6001.213140617640021803112060161074'
 
@@ -119,7 +107,7 @@ def output_format2size(output_format, is_pos,
 
 #%% uid2meta - example
 def uid2mhd_file(uid):
-    return os.path.join(img_dir, uid + '.mhd')
+    return os.path.join(paths.img_dir, uid + '.mhd')
 
 #%% Export metadata (shape, origin, spacing)
 def uid2meta(uids=uids0):
@@ -144,13 +132,13 @@ def uid2meta(uids=uids0):
             tbl.iloc[i_row,1:] = np.array(row)
     
     tbl = tbl[~pd.isnull(tbl.shape0)]
-    tbl.to_csv(meta_file, sep=',', index=False)
+    tbl.to_csv(paths.meta_file, sep=',', index=False)
     return tbl
             
 #%% Import uid2meta
-if os.path.isfile(meta_file):
-    print('meta_file exists. Loading uid2meta from %s' % meta_file)
-    tbl = pd.read_csv(meta_file)
+if os.path.isfile(paths.meta_file):
+    print('meta_file exists. Loading uid2meta from %s' % paths.meta_file)
+    tbl = pd.read_csv(paths.meta_file)
 else:
     tbl = uid2meta(uids0)
           
@@ -161,7 +149,7 @@ def uid2patch(uid, cands1,
     if (uid2patch.uid_prev is None) or \
             (uid != uid2patch.uid_prev):
         
-        img_file = os.path.join(img_dir, uid + '.mhd')
+        img_file = os.path.join(paths.img_dir, uid + '.mhd')
         
         if not os.path.isfile(img_file):
             return 0
@@ -211,7 +199,7 @@ def cand_scale2patch_file(cand,
     
 def cand2patch_file(cand, diameter_mm=8*2.5*2, spacing_mm=0.5):
     return os.path.join(
-            patch_dir, 
+            paths.patch_dir, 
             'patch=' + cand['seriesuid']
             + '+x=' + str(np.round(cand['coordX']*10)/10) 
             + '+y=' + str(np.round(cand['coordY']*10)/10) 
@@ -245,8 +233,8 @@ def cand2patch(cand, img_np=None, origin_mm=None, spacing_input_mm=None,
     dia_output_mm = np.zeros(3) + dia_output_mm
     dia_output_vox = dia_output_mm / spacing_output_mm
     
-    if not os.path.isdir(patch_dir):
-        os.mkdir(patch_dir)
+    if not os.path.isdir(paths.patch_dir):
+        os.mkdir(paths.patch_dir)
     
     if os.path.isfile(pth + '.zpkl') and \
             os.path.isfile(pth + '_slice0.png') and \
@@ -255,7 +243,7 @@ def cand2patch(cand, img_np=None, origin_mm=None, spacing_input_mm=None,
         print('Exists already. Skipping %s' % pth)
         return 0        
     
-    img_file = os.path.join(img_dir, uid + '.mhd')                    
+    img_file = os.path.join(paths.img_dir, uid + '.mhd')                    
     if img_np is None:
         if not os.path.isfile(img_file):
             return 0

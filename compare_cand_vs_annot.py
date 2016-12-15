@@ -9,30 +9,26 @@ Created on Sun Oct 16 21:21:05 2016
 import pandas as pd
 import numpy as np
 import os
-
-cand_file = '../Data/LUNA/candidates.csv'
-annotation_file = '../Data/LUNA/annotations.csv'
-cand_out_file = '../Data/LUNA/candidates_vs_annot.csv'
-uid_subset_file = '../Data/LUNA/uid_subset.csv'
+import paths
 
 #%% Load csvs
-cands = pd.read_csv(cand_file)
-cands_pos = pd.read_csv(annotation_file)
+cands = pd.read_csv(paths.cand_file)
+cands_pos = pd.read_csv(paths.annotation_file)
 n_pos = len(cands_pos)
 cands_pos.loc[:,'is_pos'] = np.ones(n_pos, dtype=np.bool)
 cands_pos.loc[:,'dist'] = np.zeros(n_pos, dtype=np.float16)
 cands_pos.loc[:,'ix_pos'] = cands_pos.index
 cands_pos.loc[:,'radius'] = cands_pos.loc[:,'diameter_mm']/2
 
-uid_subset = pd.read_csv(uid_subset_file)
+uid_subset = pd.read_csv(paths.uid_subset_file)
 
 uids = cands_pos.seriesuid.unique()
 
-if os.path.isfile(cand_out_file):
-    cands_vs_annot = pd.read_csv(cand_out_file)
+if os.path.isfile(paths.cand_out_file):
+    cands_vs_annot = pd.read_csv(paths.cand_out_file)
 else:
     print('Run compare_cand_vs_annot.main() to save cands_vs_annot at %s' \
-          % cand_out_file)
+          % paths.cand_out_file)
 
 cands_vs_annot.loc[:,'is_pos'] = cands_vs_annot.loc[:,'is_pos']==1
 cands_neg = cands_vs_annot.ix[~cands_vs_annot.is_pos,:]
@@ -50,8 +46,8 @@ def main():
     changed_cands = changed_cands or subset2cand(cands)
             
     if changed_cands:
-        cands.to_csv(cand_out_file, sep=',', index=False)
-        print('Saved to %s' % cand_out_file)
+        cands.to_csv(paths.cand_out_file, sep=',', index=False)
+        print('Saved to %s' % paths.cand_out_file)
         
 #%% 
 def match_uids(uids1):
