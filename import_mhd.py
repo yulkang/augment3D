@@ -93,8 +93,8 @@ uids0 = cands.seriesuid.unique()
 radius_min_incl = [0, 4, 8]
 radius_max_incl = [4, 8, np.inf]
 radius_max = [4, 8, 16]
-spacings_output_mm = [0.4, 0.8, 1.6]
-radius_out_per_in =  [2,   2,   2]
+spacings_output_mm = [0.8, 1.6, 3.2] # [0.4, 0.8, 1.6]
+radius_out_per_in =  [1.5, 1.5, 1.5] # [  2,   2,   2]
 output_formats = pd.DataFrame({'radius_min_incl': radius_min_incl, 
                                'radius_max_incl': radius_max_incl,
                                'radius_max': radius_max,
