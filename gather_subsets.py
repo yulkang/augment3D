@@ -12,11 +12,11 @@ import os
 import shutil
 import glob
 import pandas as pd
+import paths
 
 #%%
-dir_root = '/Volumes/YKWD3GB/YulKang/LUNA/'
-dir_dst = os.path.join(dir_root, 'all')
-dir_subsets = glob.glob(os.path.join(dir_root, 'subset*'))
+dir_dst = os.path.join(paths.img_dir_root, 'all')
+dir_subsets = glob.glob(os.path.join(paths.img_dir_root, 'subset*'))
 
 if not os.path.isdir(dir_dst):
     os.mkdir(dir_dst)
@@ -43,6 +43,6 @@ for dir_subset in dir_subsets:
                            ignore_index=True)
     os.rmdir(dir_subset)
 
-file_csv = os.path.join(dir_root, 'uid_subset.csv')
+file_csv = os.path.join(paths.img_dir_root, 'uid_subset.csv')
 df.to_csv(file_csv, sep=',', index=False)
     
