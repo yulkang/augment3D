@@ -112,8 +112,8 @@ class Dataset(object):
         n_valid = np.int32(np.ceil(n_samp * self.prop_valid))
         n_train = n_samp - n_valid
         
-        print('n_valid: %d' % n_valid)
-        print('n_train: %d' % n_train)
+#        print('n_valid: %d' % n_valid)
+#        print('n_train: %d' % n_train)
         
         imgs_valid, labels_valid = self._get_samples(n_valid)
         imgs_train, labels_train = self._get_samples(n_train)
@@ -135,7 +135,7 @@ class Dataset(object):
     #%% Retrieval - Internal
     def _get_samples(self, n_samp):
         
-        print('get_samples(%d)' % n_samp)
+#        print('get_samples(%d)' % n_samp)
         
         imgs = np.zeros([n_samp] + [self.img_size_out] * 3 + [1], 
                         dtype=np.float32)
@@ -145,10 +145,10 @@ class Dataset(object):
         for n_retrieved in range(n_samp):
             img1, label1 = self._get_next_sample()
             
-            print('img1.shape:')
-            print(img1.shape)
-            print('label1.shape:')
-            print(label1.shape)
+#            print('img1.shape:')
+#            print(img1.shape)
+#            print('label1.shape:')
+#            print(label1.shape)
             
             imgs[n_retrieved - 1, :,:,:,:] = img1
             labels[n_retrieved - 1] = label1
@@ -178,8 +178,8 @@ class Dataset(object):
             if os.path.isfile(patch_file + '.zpkl'):
                 L = zipPickle.load(patch_file + '.zpkl')
                 n_loaded += 1
-                print('Loaded %d (%d/%d successful): %s.zpkl' % 
-                      (i_cand, n_loaded, n_cand, patch_file))
+#                print('Loaded %d (%d/%d successful): %s.zpkl' % 
+#                      (i_cand, n_loaded, n_cand, patch_file))
             else:
                 print('Failed to find %s.zpkl' % patch_file)
                 continue
@@ -189,8 +189,8 @@ class Dataset(object):
                 img_all = np.zeros(siz, dtype=np.float32)
                 siz1 = siz.copy()
                 siz1[0] = 1
-                print('Loading images of size:')
-                print(L['img'].shape)
+#                print('Loading images of size:')
+#                print(L['img'].shape)
                 
             try:
                 img_all[n_loaded-1,:,:,:] = np.reshape(L['img'], siz1)
@@ -206,8 +206,8 @@ class Dataset(object):
         if img_all is not None:
             img_all = img_all[:n_loaded,:,:,:]
             
-            print(img_all.shape)
-            print(siz)
+#            print(img_all.shape)
+#            print(siz)
             siz[0] = n_loaded
             
             img_all = img_all.reshape(np.concatenate((siz,[1])))
@@ -299,9 +299,9 @@ class DatasetNeg(Dataset):
                 img_all[ix_loaded,:,:,:,:] = img_all1
                 labels[ix_loaded] = labels1
                 n_loaded += n_loaded1
-                print(img_all1.shape)
+#                print(img_all1.shape)
                 
-            print('n_loaded/n_to_load: %d/%d' % (n_loaded, n_to_load))
+#            print('n_loaded/n_to_load: %d/%d' % (n_loaded, n_to_load))
         
         self.n_used_aft_load = 0
         self.imgs_train_valid = img_all
