@@ -10,10 +10,10 @@ import pandas as pd
 import numpy as np
 import os
 
-cand_file = 'Data/LUNA/candidates.csv'
-annotation_file = 'Data/LUNA/annotations.csv'
-cand_out_file = 'Data/LUNA/candidates_vs_annot.csv'
-uid_subset_file = 'Data/LUNA/uid_subset.csv'
+cand_file = '../Data/LUNA/candidates.csv'
+annotation_file = '../Data/LUNA/annotations.csv'
+cand_out_file = '../Data/LUNA/candidates_vs_annot.csv'
+uid_subset_file = '../Data/LUNA/uid_subset.csv'
 
 #%% Load csvs
 cands = pd.read_csv(cand_file)

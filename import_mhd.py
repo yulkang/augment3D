@@ -62,18 +62,18 @@ def normalizePlanes(npzarray):
     return npzarray
     
 #%% Paths
-cand_file = 'Data/LUNA/candidates.csv'
-annotation_file = 'Data/LUNA/annotations.csv'
-cand_out_file = 'Data/LUNA/candidates_vs_annot.csv'
-uid_subset_file = 'Data/LUNA/uid_subset.csv'
+cand_file = '../Data/LUNA/candidates.csv'
+annotation_file = '../Data/LUNA/annotations.csv'
+cand_out_file = '../Data/LUNA/candidates_vs_annot.csv'
+uid_subset_file = '../Data/LUNA/uid_subset.csv'
 
-#img_dir = 'Data/LUNA/image'
+#img_dir = '../Data/LUNA/image'
 img_dir = '/Volumes/YK_SSD_1TB/LUNA/all'
-#patch_dir = 'Data/patches/'
+#patch_dir = '../Data/patches/'
 patch_dir = '/Volumes/YK_SSD_1TB/LUNA/patches'
 
-subset_file = 'Data/LUNA/uid_subset.csv'
-meta_file = 'Data/LUNA/img_meta.csv'
+subset_file = '../Data/LUNA/uid_subset.csv'
+meta_file = '../Data/LUNA/img_meta.csv'
 
 ## an example uid that is in subset0
 #uid0 = '1.3.6.1.4.1.14519.5.2.1.6279.6001.213140617640021803112060161074'
