@@ -1,5 +1,9 @@
 # Augment3D
 
+## Requirements
+* pandas
+* PIL
+* gzip
 
 ## Installation
 1. Download this code
@@ -39,3 +43,4 @@
     imgs_train, labels_train, imgs_valid, labels_valid = \
             ds.get_train_valid(batch_size)
     ```
+
