@@ -3,10 +3,14 @@
 
 ## Installation
 1. Download this code
-2. Put it next to 'Data' folder. An example folder structure would be
-    * augment3D
-        * code # this repository
-        * Data 
+2. Put it next to the 'Data' folder. An example folder structure would be
+
+   ```bash
+   augment3D
+   +-- code # this repository
+   +-- Data 
+   ```
+        
 3. Download data
     1. Go to https://grand-challenge.org/site/luna16/download/
     2. Download `annotations.csv` and `candidates.csv` to `Data/LUNA/`
