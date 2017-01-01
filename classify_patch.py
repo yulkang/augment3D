@@ -34,7 +34,7 @@ ds = datasets.get_dataset()
 
 #%% Functions to build the network
 def accuracy(predictions, labels):
-    return (100.0 * np.mean(predictions == labels))
+    return (100.0 * np.mean((predictions[:,1] > predictions[:,0]) == labels[:,1]))
   
 def add_conv(inp, 
              width_mult, 
@@ -218,7 +218,7 @@ print('loss: %f' % l)
 print('mean predictions: %f' % np.mean(predictions))
 print('logits:')
 print(logits)
-    
+
 #%%
 while (step < max_num_steps) \
     and ((step == 0) or (accu_valid > accu_valid_prev)):
@@ -238,14 +238,15 @@ while (step < max_num_steps) \
             print('Minibatch loss at step %d: %f' \
                   % (step, l))
             print('Minibatch accuracy: %.1f%%' \
-                  % accuracy(predictions, colvec(labels_train)))
+                  % accuracy(predictions, labels_train))
+            
+            pred_valid = valid_prediction.eval(
+                              feed_dict = {x : imgs_valid})
+            accu_valid = accuracy(pred_valid, labels_valid)
             print('Validation accuracy: %.1f%%' \
-                  % accuracy(
-                          valid_prediction.eval(
-                              feed_dict = {x : imgs_valid}), 
-                              colvec(labels_valid)))
+                  % accu_valid)
               
 #%%
 print('Test accuracy: %.1f%%' % accuracy(
     valid_prediction.eval(
-        feed_dict = {x : test_dataset}), colvec(test_labels)))
+        feed_dict = {x : test_dataset}), test_labels))
