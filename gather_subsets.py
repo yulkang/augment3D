@@ -1,7 +1,12 @@
 #!/usr/bin/env python2
 # -*- coding: utf-8 -*-
 """
-Gather all files into the same folder
+Gather files in different subsets into the same folder
+Source:
+    paths.img_dir_root/subset0 .. subset9
+Destination:
+    paths.img_dir_root/all # .mhd and .raw
+    paths.img_dir_root/uid_subset.csv
 
 Created on Mon Oct 17 22:43:53 2016
 

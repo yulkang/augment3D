@@ -1,6 +1,8 @@
 #!/usr/bin/env python2
 # -*- coding: utf-8 -*-
 """
+Checks if positive candidates indeed have the 
+
 Created on Sun Oct 16 21:21:05 2016
 
 @author: yulkang
@@ -118,5 +120,3 @@ def subset2cand(cands1 = cands):
 
     cands1.loc[:,'subset'] = subsets1
     return 1
-    
-#subset2cand(cands_pos)

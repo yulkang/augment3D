@@ -12,7 +12,7 @@ annotation_file = '../Data/LUNA/annotations.csv'
 uid_subset_file = '../Data/LUNA/uid_subset.csv'
 
 # Input - large
-img_root = '/Volumes/YK_SSD_1TB/LUNA/'
+img_dir_root = '/Volumes/YK_SSD_1TB/LUNA/'
 img_dir = '/Volumes/YK_SSD_1TB/LUNA/all'
 
 # Output - small

@@ -1,8 +1,8 @@
 #!/usr/bin/env python2
 # -*- coding: utf-8 -*-
 """
-Mostly follows SimpleITKTutorial.ipynb
-but loads corresponding file for each cand,
+Modified from SimpleITKTutorial.ipynb.
+Loads corresponding file for each cand,
 and fill with 0 if the nodule is too close to the boundary.
 
 Created on Sat Oct 15 16:22:52 2016
