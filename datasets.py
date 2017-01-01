@@ -139,7 +139,7 @@ class Dataset(object):
         
         imgs = np.zeros([n_samp] + [self.img_size_out] * 3 + [1], 
                         dtype=np.float32)
-        labels = np.zeros(n_samp, 
+        labels = np.zeros([n_samp, 2], 
                           dtype=np.float32)
         n_retrieved = 0
         for n_retrieved in range(n_samp):
@@ -150,10 +150,17 @@ class Dataset(object):
 #            print('label1.shape:')
 #            print(label1.shape)
             
+            img1 = img1 - np.mean(img1)
+            
+            std_img1 = np.std(img1)
+            if std_img1 != 0:
+                img1 = img1 / np.std(img1)
+
             imgs[n_retrieved - 1, :,:,:,:] = img1
-            labels[n_retrieved - 1] = label1
+            labels[n_retrieved - 1, 0] = label1
             n_retrieved += 1
         
+        labels[:,1] = 1 - labels[:,0]
         return imgs, labels
         
     def _get_next_sample(self):

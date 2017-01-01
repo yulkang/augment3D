@@ -43,7 +43,7 @@ def add_conv(inp,
              width_pool = 0,
              stride_pool = 2,
              stddev = 0.1,
-             bias = 1.0,
+             bias = 0.0,
              keep_prob = 1):
     
     depth_in = inp.get_shape().as_list()[-1]
@@ -65,7 +65,7 @@ def add_conv(inp,
     return hidden
   
 def add_dense(inp, depth_out, 
-              bias = 1.0,
+              bias = 0.0,
               keep_prob = 1,
               stddev = 0.1, 
               is_final = False):
@@ -89,10 +89,10 @@ def add_dense(inp, depth_out,
 #%% Settings
 img_size = ds.ds_pos.img_size_out
 
-n_labels = 1
+n_labels = 2
 n_chan = 1 # grayscale
-batch_size = 128 # 16
-patch_size = 4
+batch_size = 16 # 16
+patch_size = 3
 stride_size = 2
 pool_size = 2
 depth_conv = 64
@@ -111,10 +111,10 @@ y = tf.placeholder(tf.float32,
 #tf_test_dataset = tf.constant(test_dataset)
 
 # Variables.
-keep_probs_train = [1, 1, 1, .5, .5]
+keep_probs_train = [1, 1, 1, 1] # .5, .5]
 keep_probs_all = np.ones(len(keep_probs_train))
 
-layer_kind = ['conv', 'conv', 'conv', 'dense', 'dense']
+layer_kind = ['conv', 'conv', 'dense', 'dense']
 is_layer_kind = lambda kind: \
     np.array([kind1 == kind for kind1 in layer_kind], 
              dtype=np.int32)
@@ -175,7 +175,7 @@ logits = model(keep_probs_all)
 valid_prediction = tf.nn.softmax(logits)  
 
 # Optimizer
-optimizer = tf.train.GradientDescentOptimizer(0.05).minimize(loss_train)
+optimizer = tf.train.GradientDescentOptimizer(0.001).minimize(loss_train)
 
 #%% Start session
 if 'sess' in vars():
@@ -189,8 +189,8 @@ print('Initialized')
 step = 0
     
 #%%
-max_num_steps = 10
-num_steps = 5 # 3000 steps give test accuracy 91.5%
+max_num_steps = 2
+num_steps = 5
 validate_per_step = 1
 
 accu_valid_prev = -1
@@ -201,6 +201,24 @@ batch_size = 100
 def colvec(v):
     return np.reshape(v, [-1,1])
 
+#%% Get data
+imgs_train, labels_train, imgs_valid, labels_valid = \
+    ds.get_train_valid(batch_size)
+
+#%% Test run
+feed_dict = {x: imgs_train, y: labels_train}
+_, l, predictions = sess.run(
+    [optimizer, loss_train, train_prediction], feed_dict=feed_dict)
+
+#%%
+logits = sess.run(logits_train, feed_dict=feed_dict)
+
+#%%
+print('loss: %f' % l)
+print('mean predictions: %f' % np.mean(predictions))
+print('logits:')
+print(logits)
+    
 #%%
 while (step < max_num_steps) \
     and ((step == 0) or (accu_valid > accu_valid_prev)):
@@ -213,7 +231,7 @@ while (step < max_num_steps) \
         imgs_train, labels_train, imgs_valid, labels_valid = \
             ds.get_train_valid(batch_size)
         
-        feed_dict = {x: imgs_train, y: colvec(labels_train)}
+        feed_dict = {x: imgs_train, y: labels_train}
         _, l, predictions = sess.run(
             [optimizer, loss_train, train_prediction], feed_dict=feed_dict)
         if (step % validate_per_step == 0):
