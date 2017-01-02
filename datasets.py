@@ -330,6 +330,9 @@ class DatasetPos(Dataset):
               - self.img_size_out / 2
                 
         self.ix_to_read = -1
+        self.to_translate = True
+        self.to_flip = True
+        self.to_rotate = True
             
     def _filter_cands(self, cands):
         radius_min_incl = self.output_format.radius_min_incl
@@ -345,12 +348,32 @@ class DatasetPos(Dataset):
         self.ix_to_read = np.mod(self.ix_to_read + 1, self.n_train_valid)
         ix1 = self.ix_to_read # shuffle happened in __init__
         
-        radius_vox = self.radius.iloc[ix1] / self.spacing_output_mm
-        dx, dy, dz = self._samp_sphere(radius_vox)
+        # Translation wihtin sphere
+        if self.to_translate:
+            radius_vox = self.radius.iloc[ix1] / self.spacing_output_mm
+            dx, dy, dz = self._samp_sphere(radius_vox)
+        else:
+            dx = 0
+            dy = 0
+            dz = 0
+            
         x = np.int32(np.fix(dx)) + self.ix_vox
         y = np.int32(np.fix(dy)) + self.ix_vox
         z = np.int32(np.fix(dz)) + self.ix_vox
+
+        # Flip
+        if self.to_flip:
+            flip_x = np.random.rand < 0.5
+            flip_y = np.random.rand < 0.5
+            flip_z = np.random.rand < 0.5
+            if flip_x:
+                x = np.flipud(x)
+            if flip_y:
+                y = np.flipud(y)
+            if flip_z:
+                z = np.flipud(z)
         
+        # Slicing        
 #        print('dx, dy, dz:')
 #        print((dx, dy, dz))
 #        print('x,y,z:')
@@ -362,8 +385,16 @@ class DatasetPos(Dataset):
         ix_img = np.ix_(np.array([ix1]),x,y,z,np.array([0]))
 #        print('ix_img:')
 #        print(ix_img)
-                    
-        return (self.imgs_train_valid0[ix_img],
+
+        img = self.imgs_train_valid0[ix_img]
+
+        # Rotation
+        if self.to_rotate:
+            order = np.random.permutation(3) + 1
+            img = np.transpose(img, [0] + list(order) + [4])
+        
+        # Output                    
+        return (img,
                 self.labels.iloc[ix1])
     
     def _samp_sphere(self, radius = 1):
