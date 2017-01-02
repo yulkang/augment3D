@@ -37,19 +37,19 @@ Augment3D includes both a general-purpose module that augments 3D patches, and a
 
 ## Usage
 1. Rename `img_dir_root`, `img_dir`, and `patch_dir` in `paths.py`.
-2. Move all images into one folder and create a `.csv` containing the UID and the subset info
+2. Move all images into one folder and create a `.csv` containing the UID and the subset info with:
 
     ```python
     gather_subsets # separate from import_mhd (next step) because import_mhd takes a long time
     ```
     
-3. Import images
+3. Import images with:
 
     ```python
     import_mhd # Takes a long time, potentially hours to days
     ```
     
-4. Use the data. Positive samples are automatically augmented.
+4. Retrieve the data using `dataset` module. Positive samples are automatically augmented.
 
     ```python
     import datasets as ds
