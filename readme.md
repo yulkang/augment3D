@@ -22,12 +22,13 @@ Augment3D includes both a general-purpose module that augments 3D patches, and a
 
 ## Installation
 1. Download this code.
-2. Put it next to the 'Data' folder. An example folder structure would be
+2. Put it next to the 'Data' folder. An example folder structure would be:
 
    ```bash
    augment3D
    +-- augment3D # this repository
-   +-- Data 
+   +-- Data
+   ....+-- LUNA # put annotations.csv and candidates.csv here
    ```
         
 3. Download data.
