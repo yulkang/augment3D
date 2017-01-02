@@ -49,7 +49,7 @@ Augment3D includes both a general-purpose module that augments 3D patches, and a
     import_mhd # Takes a long time, potentially hours to days
     ```
     
-4. Retrieve the data using `dataset` module. Positive samples are automatically augmented.
+4. Retrieve the data using the module `datasets`. Positive samples are automatically augmented.
 
     ```python
     import datasets as ds
