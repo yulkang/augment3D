@@ -1,11 +1,10 @@
 # Augment3D
-## Augmentation of a 3D image of a focal lesion 
-## with 3D rotation, flip, and translation
+: Augmentation of a 3D image of a focal lesion with 3D rotation, flip, and translation
 
 ## Introduction
 When detecting a lesion from a medical image, it is often a good strategy to first identify parts of the image (“patches”) that likely contain the lesion and classify the patches as containing the lesion or not. It can be especially effective when the lesion is relatively small compared to the whole image, as is the case for detecting lymph node metastases from thoraco-abdominal MRI scans or for detecting lung nodules from lung CT scans. 
 
-The challenge is that there are usually not enough positive examples. Augment3D addresses this challenge by augmenting the positive examples with 3D rotation, flip, and translation, in-memory. Because the image is 3D, rotation in angles multiple of 90 degrees alone gives 3! = 6 times the data. Combined with flip (23=8), it gives 48 times the original data.
+The challenge is that there are usually not enough positive examples. Augment3D addresses this challenge by augmenting the positive examples with 3D rotation, flip, and translation, in-memory. Because the image is 3D, rotation in angles multiple of 90 degrees alone gives 3! = 6 times the data. Combined with flip (2^3=8), it gives 48 times the original data.
 
 In translation, Augment3D shifts the data with a vector sampled uniformly within the sphere of the annotated radius of the lesion. When the radius of the lesion is 5 voxels, for example, the method augments the data more than 200 times. 
 
