@@ -111,7 +111,7 @@ y = tf.placeholder(tf.float32,
 #tf_test_dataset = tf.constant(test_dataset)
 
 # Variables.
-keep_probs_train = [1, 1, 1, 1] # .5, .5]
+keep_probs_train = [1, 1, .9, .9] # .5, .5]
 keep_probs_all = np.ones(len(keep_probs_train))
 loss_reg_wt = [0.001, 0.001, 0.001, 0.001]
 
@@ -196,9 +196,9 @@ print('Initialized')
 step = 0
     
 #%%
-max_num_steps = 5
+max_num_steps = 50
 num_steps = 10
-validate_per_step = 10
+validate_per_step = 1
 
 accu_valid_prev = -1
 accu_valid = 0
@@ -238,7 +238,7 @@ while (step < max_num_steps) \
         imgs_train, labels_train, _, _ = \
             ds.get_train_valid(batch_size)
         
-#        feed_dict = {x: imgs_train, y: labels_train}
+        feed_dict = {x: imgs_train, y: labels_train}
         _, l, predictions = sess.run(
             [optimizer, loss_train, train_prediction], feed_dict=feed_dict)
         
