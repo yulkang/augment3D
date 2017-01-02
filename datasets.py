@@ -396,13 +396,13 @@ def demo_kwargs(args1, **kwargs):
         
     
 #%%
-def get_dataset():
+def get_dataset(**kwargs):
     import datasets
     reload(datasets)
     cands_neg = mhd.cands_neg
     cands_neg = cands_neg.ix[cands_neg.subset.isin([0])]
     return datasets.DatasetPosNeg(mhd.cands_pos, cands_neg,
-                              n_img_per_load = 1000)
+                              n_img_per_load = 1000, **kwargs)
     
 #%%
 def demo():
