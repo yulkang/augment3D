@@ -41,7 +41,8 @@ Augment3D includes both a general-purpose module that augments 3D patches, and a
 2. Move all images into one folder and create a `.csv` containing the UID and the subset info with:
 
     ```python
-    augment3D.gather_subsets # separate from import_mhd (next step) because import_mhd takes a long time
+    import augment3D.gather_subsets as gsubj
+    gsubj.main() # separate from import_mhd (next step) because import_mhd takes a long time
     ```
     
 3. Import images with:
