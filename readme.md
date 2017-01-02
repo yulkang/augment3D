@@ -21,7 +21,7 @@ Augment3D includes both a general-purpose module that augments 3D patches, and a
 * gzip
 
 ## Installation
-1. Download this code
+1. Download this code.
 2. Put it next to the 'Data' folder. An example folder structure would be
 
    ```bash
@@ -30,7 +30,7 @@ Augment3D includes both a general-purpose module that augments 3D patches, and a
    +-- Data 
    ```
         
-3. Download data
+3. Download data.
     1. Go to https://grand-challenge.org/site/luna16/download/
     2. Download `annotations.csv` and `candidates.csv` to `Data/LUNA/`
     3. Download `subset*.zip` to a suitable folder, such as `ExternalHDD/LUNA/`
