@@ -41,19 +41,19 @@ Augment3D includes both a general-purpose module that augments 3D patches, and a
 2. Move all images into one folder and create a `.csv` containing the UID and the subset info with:
 
     ```python
-    gather_subsets # separate from import_mhd (next step) because import_mhd takes a long time
+    augment3D.gather_subsets # separate from import_mhd (next step) because import_mhd takes a long time
     ```
     
 3. Import images with:
 
     ```python
-    import_mhd # Takes a long time, potentially hours to days
+    augment3D.import_mhd # Takes a long time, potentially hours to days
     ```
     
 4. Retrieve the data using the module `datasets`. Positive samples are automatically augmented.
 
     ```python
-    import datasets as ds
+    import augment3D.datasets as ds
     batch_size = 100
     imgs_train, labels_train, imgs_valid, labels_valid = \
             ds.get_train_valid(batch_size)
