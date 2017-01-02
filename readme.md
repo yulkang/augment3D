@@ -47,7 +47,8 @@ Augment3D includes both a general-purpose module that augments 3D patches, and a
 3. Import images with:
 
     ```python
-    augment3D.import_mhd # Takes a long time, potentially hours to days
+    import augment3D.import_mhd as mhd
+    mhd.main() # Takes a long time, potentially hours to days
     ```
     
 4. Retrieve the data using the module `datasets`. Positive samples are automatically augmented.
