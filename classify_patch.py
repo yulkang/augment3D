@@ -30,7 +30,7 @@ import datasets
 
 #%% Choose train and test datasets
 reload(datasets)
-ds = datasets.get_dataset()
+ds = datasets.get_dataset(prop_valid = 0)
 
 #%% Functions to build the network
 def accuracy(predictions, labels):
@@ -62,7 +62,7 @@ def add_conv(inp,
                                   [1] + [width_pool] * 3 + [1], 
                                   [1] + [stride_pool] * 3 + [1], 
                                   padding='VALID')
-    return hidden
+    return hidden, weight_dropout
   
 def add_dense(inp, depth_out, 
               bias = 0.0,
@@ -84,7 +84,7 @@ def add_dense(inp, depth_out,
     dense = tf.matmul(inp_reshaped, weight_dropout) + bias_op
     if not is_final:
         dense = tf.nn.relu(dense)
-    return dense
+    return dense, weight_dropout
 
 #%% Settings
 img_size = ds.ds_pos.img_size_out
@@ -113,6 +113,7 @@ y = tf.placeholder(tf.float32,
 # Variables.
 keep_probs_train = [1, 1, 1, 1] # .5, .5]
 keep_probs_all = np.ones(len(keep_probs_train))
+loss_reg_wt = [0.001, 0.001, 0.001, 0.001]
 
 layer_kind = ['conv', 'conv', 'dense', 'dense']
 is_layer_kind = lambda kind: \
@@ -136,42 +137,48 @@ weights0 = list()
 biases = list()
 
 def model(keep_probs):
-    curr_layer = x
+    all_net = x
+    loss_reg = tf.Variable(0.0)
     for layer in range(n_layer):
         print('--- Layer %d ---' % layer)
         print('Input :', end='')
-        print(curr_layer.get_shape().as_list(), end='\n')
+        print(all_net.get_shape().as_list(), end='\n')
         
         if layer_kind[layer] == 'conv':
-            curr_layer = add_conv(curr_layer,
-                                  widths_mult[layer],
-                                  strides_mult[layer],
-                                  depth_out[layer],
-                                  width_pool=widths_pool[layer],
-                                  stride_pool=strides_pool[layer],
-                                  keep_prob=keep_probs[layer])
+            all_net, curr_wt = add_conv(
+                    all_net,
+                    widths_mult[layer],
+                    strides_mult[layer],
+                    depth_out[layer],
+                    width_pool=widths_pool[layer],
+                    stride_pool=strides_pool[layer],
+                    keep_prob=keep_probs[layer])
+            loss_reg = loss_reg + tf.nn.l2_loss(curr_wt) * loss_reg_wt[layer]
             
         elif layer_kind[layer] == 'dense':
-            curr_layer = add_dense(curr_layer,
-                                   depth_out[layer],
-                                   keep_prob=keep_probs[layer],
-                                   is_final=layer >= n_layer - 1)
+            all_net, curr_wt = add_dense(
+                    all_net,
+                    depth_out[layer],
+                    keep_prob=keep_probs[layer],
+                    is_final=layer >= n_layer - 1)
+            loss_reg = loss_reg + tf.nn.l2_loss(curr_wt) * loss_reg_wt[layer]
         else:
             raise ValueError('layer_kind[%d]=%s not allowed!' % 
                              (layer, layer_kind[layer]))
         
         print('Output:', end='')
-        print(curr_layer.get_shape().as_list(), end='\n')
+        print(all_net.get_shape().as_list(), end='\n')
         
-    return curr_layer
+    return all_net, loss_reg
 
 # Cost function
-logits_train = model(keep_probs_train)
+logits_train, loss_reg_train = model(keep_probs_train)
 loss_train = tf.reduce_mean(
-    tf.nn.softmax_cross_entropy_with_logits(logits_train, y))
+    tf.nn.softmax_cross_entropy_with_logits(logits_train, y)
+    + loss_reg_train)
 train_prediction = tf.nn.softmax(logits_train)
 
-logits = model(keep_probs_all)
+logits, _ = model(keep_probs_all)
 valid_prediction = tf.nn.softmax(logits)  
 
 # Optimizer
@@ -189,9 +196,9 @@ print('Initialized')
 step = 0
     
 #%%
-max_num_steps = 2
-num_steps = 5
-validate_per_step = 1
+max_num_steps = 5
+num_steps = 10
+validate_per_step = 10
 
 accu_valid_prev = -1
 accu_valid = 0
@@ -228,18 +235,22 @@ while (step < max_num_steps) \
     for step1 in range(num_steps):
         step += 1
         
-        imgs_train, labels_train, imgs_valid, labels_valid = \
+        imgs_train, labels_train, _, _ = \
             ds.get_train_valid(batch_size)
         
-        feed_dict = {x: imgs_train, y: labels_train}
+#        feed_dict = {x: imgs_train, y: labels_train}
         _, l, predictions = sess.run(
             [optimizer, loss_train, train_prediction], feed_dict=feed_dict)
+        
+        print('Minibatch loss at step %d: %f' \
+              % (step, l))
+        print('Minibatch accuracy: %.1f%%' \
+              % accuracy(predictions, labels_train))
+        
         if (step % validate_per_step == 0):
-            print('Minibatch loss at step %d: %f' \
-                  % (step, l))
-            print('Minibatch accuracy: %.1f%%' \
-                  % accuracy(predictions, labels_train))
-            
+            imgs_valid, labels_valid, _, _ = \
+                ds.get_train_valid(batch_size)
+                
             pred_valid = valid_prediction.eval(
                               feed_dict = {x : imgs_valid})
             accu_valid = accuracy(pred_valid, labels_valid)
