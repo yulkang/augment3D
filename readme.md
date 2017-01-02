@@ -26,7 +26,7 @@ Augment3D includes both a general-purpose module that augments 3D patches, and a
 
    ```bash
    augment3D
-   +-- code # this repository
+   +-- augment3D # this repository
    +-- Data 
    ```
         
