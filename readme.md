@@ -21,6 +21,7 @@ Augment3D also includes a classifier (`classify_patch`) using a deep 3D convolut
 * PIL
 * SimpleITK
 * gzip
+* TensorFlow (for `classify_patch.py` only)
 
 ## Installation
 1. Download this code.
@@ -33,7 +34,7 @@ Augment3D also includes a classifier (`classify_patch`) using a deep 3D convolut
    ....+-- LUNA # put annotations.csv and candidates.csv here
    ```
         
-3. Download data.
+3. Download the data.
     1. Go to https://grand-challenge.org/site/luna16/download/
     2. Download `annotations.csv` and `candidates.csv` to `Data/LUNA/`
     3. Download `subset*.zip` to a suitable folder, such as `ExternalHDD/LUNA/`
