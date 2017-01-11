@@ -1,6 +1,8 @@
 #!/usr/bin/env python2
 # -*- coding: utf-8 -*-
 """
+Contain paths used by other modules.
+
 Created on Thu Dec 15 04:32:01 2016
 
 @author: yulkang
