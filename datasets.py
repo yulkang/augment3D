@@ -1,6 +1,8 @@
 #!/usr/bin/env python2
 # -*- coding: utf-8 -*-
 """
+Augment 3D patch data with 3D rotation, flip, and translation, in-memory.
+
 Created on Thu Oct 27 21:46:48 2016
 
 @author: yulkang
@@ -8,28 +10,39 @@ Created on Thu Oct 27 21:46:48 2016
 
 #%% Import
 import numpy as np
-
-import pandas as pd
 import warnings
 import os
-from PIL import Image
-import matplotlib.pyplot as plt
 import time
 
 from pysy import zipPickle
-import compare_cand_vs_annot as annot
 import import_mhd as mhd
 
-#%% Class
+#%% Classes
 class DatasetPosNeg(object):
+    """
+    Retrieve data from both positive and negative examples.
+    Since positive examples are augmented (they are scarce) 
+    but negative examples are not (they are abundant),
+    DatasetPosNeg contains an object for each class.
+    It serves as an interface for the classifier
+    by providing data with positive and negative examples 
+    concatenated together.
+    
+    Use get_train_valid() to retrieve images and labels.
+    """
+    
     #%% Initialization
     def __init__(self, cands_pos, cands_neg, 
                prop_pos = 0.5,
                pos_args = {},
                neg_args = {},
                **kwargs):
-        # Give common arguments as kwargs. 
-        # pos_args and neg_args overwrites kwargs.
+        """
+        cands_pos, cands_neg : candidate 
+        prop_pos : proportion of positive examples to return.
+        Give common arguments as kwargs. 
+        pos_args and neg_args overwrite kwargs.
+        """
         
         self.prop_pos = prop_pos
         
@@ -43,9 +56,13 @@ class DatasetPosNeg(object):
         self.ds_neg = DatasetNeg(cands_neg, **neg_args1)
         
     def get_train_valid(self, n_samp):
-        # n_samp should be the size of a minibatch,
-        # from which the gradient is calculated.
-        # The order of positive and negative samples is not randomized!
+        """
+        n_samp should be the size of a minibatch,
+        from which the gradient is calculated.
+        
+        NOTE: The order of positive and negative samples is not randomized
+        within a minibatch, although they are randomized across minibatches.        
+        """
         
         n_pos = np.int32(np.ceil(n_samp * self.prop_pos))
         n_neg = n_samp - n_pos
@@ -62,6 +79,10 @@ class DatasetPosNeg(object):
                np.concatenate((labels_valid_pos, labels_valid_neg))
 
 class Dataset(object):
+    """
+    Template for DatasetPos and DatasetNeg.
+    """
+    
     #%% Initialization
     def __init__(self, cands,
                  is_pos = None,
@@ -112,9 +133,6 @@ class Dataset(object):
         n_valid = np.int32(np.ceil(n_samp * self.prop_valid))
         n_train = n_samp - n_valid
         
-#        print('n_valid: %d' % n_valid)
-#        print('n_train: %d' % n_train)
-        
         imgs_valid, labels_valid = self._get_samples(n_valid)
         imgs_train, labels_train = self._get_samples(n_train)
         
@@ -135,8 +153,6 @@ class Dataset(object):
     #%% Retrieval - Internal
     def _get_samples(self, n_samp):
         
-#        print('get_samples(%d)' % n_samp)
-        
         imgs = np.zeros([n_samp] + [self.img_size_out] * 3 + [1], 
                         dtype=np.float32)
         labels = np.zeros([n_samp, 2], 
@@ -144,11 +160,6 @@ class Dataset(object):
         n_retrieved = 0
         for n_retrieved in range(n_samp):
             img1, label1 = self._get_next_sample()
-            
-#            print('img1.shape:')
-#            print(img1.shape)
-#            print('label1.shape:')
-#            print(label1.shape)
             
             img1 = img1 - np.mean(img1)
             
@@ -244,6 +255,16 @@ class Dataset(object):
         return img_all, label_all, ix_loaded
         
 class DatasetNeg(Dataset):
+    """
+    Load patches incrementally from the disk after a set number of reuse.
+    Suitable for negative examples which are abundant and does not need to be
+    augemnted.
+    
+    The user doesn't need to invoke a separate command for loading:
+    s/he can keep calling get_train_valid() and the samples will be
+    loaded if necessary.
+    """
+    
     # Preload parts
     def __init__(self, cands, 
                  n_img_per_load = None,
@@ -315,9 +336,14 @@ class DatasetNeg(Dataset):
         self.labels_train_valid = labels
             
 class DatasetPos(Dataset):
-    # Load all on construction, augment by shift
+    """
+    Load all patches on construction and augment them in-memory on retrieval.
+    Suitable for positive examples which are scarce and needs augmentation.
+    """
+    
     def __init__(self, cands,
                **kwargs):
+        # Load all on construction, augment by shift
         Dataset.__init__(self, cands, **kwargs)
         
         self.imgs_train_valid0, self.labels_train_valid, _ = \
@@ -335,6 +361,7 @@ class DatasetPos(Dataset):
         self.to_rotate = True
             
     def _filter_cands(self, cands):
+        """ Include positive examples only. """
         radius_min_incl = self.output_format.radius_min_incl
         radius_max_incl = self.output_format.radius_max_incl
         radius = np.float32(self.cands.radius)
@@ -348,7 +375,9 @@ class DatasetPos(Dataset):
         self.ix_to_read = np.mod(self.ix_to_read + 1, self.n_train_valid)
         ix1 = self.ix_to_read # shuffle happened in __init__
         
-        # Translation wihtin sphere
+        # Get the vector for translation wihtin a sphere
+        # centered at the annotated location
+        # with the annotated radius.
         if self.to_translate:
             radius_vox = self.radius.iloc[ix1] / self.spacing_output_mm
             dx, dy, dz = self._samp_sphere(radius_vox)
@@ -373,7 +402,7 @@ class DatasetPos(Dataset):
             if flip_z:
                 z = np.flipud(z)
         
-        # Slicing        
+        # Translation achieved by slicing.        
 #        print('dx, dy, dz:')
 #        print((dx, dy, dz))
 #        print('x,y,z:')
@@ -388,7 +417,7 @@ class DatasetPos(Dataset):
 
         img = self.imgs_train_valid0[ix_img]
 
-        # Rotation
+        # Rotation achieved by permutation of axes.
         if self.to_rotate:
             order = np.random.permutation(3) + 1
             img = np.transpose(img, [0] + list(order) + [4])
@@ -424,9 +453,8 @@ def demo_kwargs(args1, **kwargs):
     print(args1)
     args1.update(kwargs)
     print(args1)
-        
     
-#%%
+#%% For easy construction.
 def get_dataset(**kwargs):
     import datasets
     reload(datasets)

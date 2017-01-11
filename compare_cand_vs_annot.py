@@ -1,19 +1,20 @@
 #!/usr/bin/env python2
 # -*- coding: utf-8 -*-
 """
-Checks if positive candidates indeed have the 
+Prepare the list of patches along with the image IDs (uids) and coordinates.
 
 Created on Sun Oct 16 21:21:05 2016
 
 @author: yulkang
 """
 
+#%% Import
 import pandas as pd
 import numpy as np
 import os
 import paths
 
-#%% Load csvs
+#%% Load CSVs
 cands = pd.read_csv(paths.cand_file)
 cands_pos = pd.read_csv(paths.annotation_file)
 n_pos = len(cands_pos)
@@ -41,7 +42,7 @@ n_cand_pos = len(cands_pos)
 coords = np.transpose(np.array(cands.loc[:,['coordX','coordY','coordZ']]))
 coords_pos = np.transpose(np.array(cands_pos.loc[:,['coordX','coordY','coordZ']]))
 
-#%% Compare cands and cands_pos
+#%% Save the list of candidates to a CSV file
 def main():
     changed_cands = False
     changed_cands = changed_cands or match_uids(uids)
@@ -51,15 +52,9 @@ def main():
         cands.to_csv(paths.cand_out_file, sep=',', index=False)
         print('Saved to %s' % paths.cand_out_file)
         
-#%% 
+#%% Get distance from the annotated position & radius
+# and assign the class (+/-).
 def match_uids(uids1):
-#    if np.all(pd.Series(['dist',
-#                         'radius',
-#                         'is_pos',
-#                         'ix_pos'
-#                         ]).isin(cands.columns)):
-#        return 0
-        
     dist = np.nan + np.zeros(n_cand)
     radius = np.nan + np.zeros(n_cand)
     is_pos = np.zeros(n_cand)
@@ -71,20 +66,12 @@ def match_uids(uids1):
         
         if not np.any(in_cand_pos):
             return 0
-            
-#        print(uid1)
-#        print(len(in_cand_pos))
-#        print(coords_pos.shape)
-#        print(coords_pos[:,in_cand_pos].shape)
-        
+
         d_coords = np.reshape(coords[:,in_cand], [3,-1,1]) \
                  - np.reshape(coords_pos[:,in_cand_pos], [3,1,-1],
                               order='F')
                  
-#        print(d_coords.shape)
-                 
         dist1 = np.sum(d_coords ** 2, 0) ** 0.5
-#        print(dist1.shape)
         
         radius1 = np.reshape(cands_pos.loc[in_cand_pos,'diameter_mm'] / 2, 
                              [1,-1])

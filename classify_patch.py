@@ -1,14 +1,19 @@
 #!/usr/bin/env python2
 # -*- coding: utf-8 -*-
 """
+Trains a deep 3D convolution network to classify 3D patches.
+Use as a demo for how to retrieve data for training.
+Hyperparameters are yet to be optimized.
+
+Some parts are from TensorFlow Udacity Tutorial, available at:
+    https://github.com/tensorflow/tensorflow/blob/master/tensorflow/examples/udacity/4_convolutions.ipynb
+
 Created on Sat Jun 11 17:09:43 2016
 
 @author: yulkang
 """
 
 #%% Import
-# These are all the modules we'll be using later. Make sure you can import them
-# before proceeding further.
 from __future__ import print_function
 import numpy as np
 import tensorflow as tf
@@ -16,7 +21,8 @@ from six.moves import range
 
 import datasets
 
-#%% Choose train and test datasets
+#%% Import dataset
+# Requires LUNA data. See the Installation section of readme.md.
 reload(datasets)
 ds = datasets.get_dataset(prop_valid = 0)
 
@@ -74,12 +80,12 @@ def add_dense(inp, depth_out,
         dense = tf.nn.relu(dense)
     return dense, weight_dropout
 
-#%% Settings
+#%% Hyperparameters. Yet to be optimized.
 img_size = ds.ds_pos.img_size_out
 
 n_labels = 2
 n_chan = 1 # grayscale
-batch_size = 16 # 16
+batch_size = 16
 patch_size = 3
 stride_size = 2
 pool_size = 2
@@ -91,12 +97,6 @@ x = tf.placeholder(tf.float32,
                    shape=[None, img_size, img_size, img_size, n_chan])
 y = tf.placeholder(tf.float32, 
                    shape=[None, n_labels])
-
-#tf_train_dataset = tf.placeholder(
-#  tf.float32, shape=(batch_size, img_size, img_size, n_chan))
-#tf_train_labels = tf.placeholder(tf.float32, shape=(batch_size, n_labels))
-#tf_valid_dataset = tf.constant(valid_dataset)
-#tf_test_dataset = tf.constant(test_dataset)
 
 # Variables.
 keep_probs_train = [1, 1, .9, .9] # .5, .5]
@@ -125,6 +125,12 @@ weights0 = list()
 biases = list()
 
 def model(keep_probs):
+    """ 
+    Gives a model for either training or validation depending on keep_probs
+    which determines whether to apply dropout 
+    (give 1s, or keep_probs_all, for validation).
+    """
+    
     all_net = x
     loss_reg = tf.Variable(0.0)
     for layer in range(n_layer):
@@ -172,13 +178,11 @@ valid_prediction = tf.nn.softmax(logits)
 # Optimizer
 optimizer = tf.train.GradientDescentOptimizer(0.001).minimize(loss_train)
 
-#%% Start session
+#%% Start a session
 if 'sess' in vars():
-    sess.close()
+    sess.close() # For easy experimentation using the cell mode in Spyder.
         
 sess = tf.InteractiveSession()
-
-# Begin session
 sess.run(tf.initialize_all_variables())
 print('Initialized')
 step = 0
@@ -196,25 +200,22 @@ batch_size = 100
 def colvec(v):
     return np.reshape(v, [-1,1])
 
-#%% Get data
+#%% Test run
 imgs_train, labels_train, imgs_valid, labels_valid = \
     ds.get_train_valid(batch_size)
 
-#%% Test run
 feed_dict = {x: imgs_train, y: labels_train}
 _, l, predictions = sess.run(
     [optimizer, loss_train, train_prediction], feed_dict=feed_dict)
 
-#%%
 logits = sess.run(logits_train, feed_dict=feed_dict)
 
-#%%
 print('loss: %f' % l)
 print('mean predictions: %f' % np.mean(predictions))
 print('logits:')
 print(logits)
 
-#%%
+#%% Iterate
 while (step < max_num_steps) \
     and ((step == 0) or (accu_valid > accu_valid_prev)):
     
@@ -245,7 +246,7 @@ while (step < max_num_steps) \
             print('Validation accuracy: %.1f%%' \
                   % accu_valid)
               
-#%%
+#%% Test accuracy
 print('Test accuracy: %.1f%%' % accuracy(
     valid_prediction.eval(
         feed_dict = {x : test_dataset}), test_labels))

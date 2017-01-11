@@ -1,9 +1,15 @@
 #!/usr/bin/env python2
 # -*- coding: utf-8 -*-
 """
-Modified from SimpleITKTutorial.ipynb.
-Loads corresponding file for each cand,
-and fill with 0 if the nodule is too close to the boundary.
+Loads 3D image files (.mhd) and extracts 3D patches with a margin
+so that the patches can be augmented with translation.
+
+Images are compressed in-memory before saving, 
+and saved along with .tif previews on XY, YZ, and XZ planes
+for an easy sanity check.
+
+Some parts are from SimpleITKTutorial.ipynb, available at:
+    https://grand-challenge.org/site/luna16/tutorial/
 
 Created on Sat Oct 15 16:22:52 2016
 
@@ -16,15 +22,13 @@ import numpy as np
 import csv
 import os
 from PIL import Image
-import matplotlib.pyplot as plt
 import pandas as pd
 import warnings
 
 import compare_cand_vs_annot as annot
-from pysy.stat import ecdf
 import paths
 
-#%% Define functions
+#%% Define functions to load images / CSVs
 def load_itk_image(filename):
     if not os.path.isfile(filename):
         return None, None, None
@@ -48,12 +52,7 @@ def readCSV(filename):
             lines.append(line)
     return lines
     
-#def worldToVoxelCoord(worldCoord, origin, spacing):
-#    stretchedVoxelCoord = np.absolute(worldCoord - origin)
-#    voxelCoord = stretchedVoxelCoord / spacing
-#    return voxelCoord
-    
-#%% Normalization
+#%% Normalize the intensity of the image.
 maxHU = 400.
 minHU = -1000.
 
@@ -63,26 +62,24 @@ def normalizePlanes(npzarray):
     npzarray[npzarray<0] = 0.
     return npzarray
     
-## an example uid that is in subset0
-#uid0 = '1.3.6.1.4.1.14519.5.2.1.6279.6001.213140617640021803112060161074'
-
-#%% load candidates
+#%% Load candidates.
 cands = annot.cands_vs_annot
 cands_pos = annot.cands_pos
 uid_subset = annot.uid_subset
 cands_neg = annot.cands_neg
 
-#%% Get unique uids
+#%% Get unique uids.
 uid0 = cands.seriesuid
 uids0 = cands.seriesuid.unique()
 
-#%% Output format based on radius
-# max radius is 16.14mm
+#%% Output formats based on the annotated radius of the lesion.
+# max nodule radius in the LUNA dataset is 16.14mm.
+# So we will divide the range into 0-4, 4-8, and 8-16mm.
 radius_min_incl = [0, 4, 8]
 radius_max_incl = [4, 8, np.inf]
 radius_max = [4, 8, 16]
-spacings_output_mm = [0.8, 1.6, 3.2] # [0.4, 0.8, 1.6]
-radius_out_per_in =  [1.5, 1.5, 1.5] # [  2,   2,   2]
+spacings_output_mm = [0.8, 1.6, 3.2]
+radius_out_per_in =  [1.5, 1.5, 1.5] # >1 to have a margin for shifting.
 output_formats = pd.DataFrame({'radius_min_incl': radius_min_incl, 
                                'radius_max_incl': radius_max_incl,
                                'radius_max': radius_max,
@@ -104,10 +101,6 @@ def output_format2size(output_format, is_pos,
     diameter_vox = np.int32(diameter_mm / spacing_mm)
     
     return diameter_mm, diameter_vox
-
-#%% uid2meta - example
-def uid2mhd_file(uid):
-    return os.path.join(paths.img_dir, uid + '.mhd')
 
 #%% Export metadata (shape, origin, spacing)
 def uid2meta(uids=uids0):
@@ -135,6 +128,9 @@ def uid2meta(uids=uids0):
     tbl.to_csv(paths.meta_file, sep=',', index=False)
     return tbl
             
+def uid2mhd_file(uid):
+    return os.path.join(paths.img_dir, uid + '.mhd')
+
 #%% Import uid2meta
 if os.path.isfile(paths.meta_file):
     print('meta_file exists. Loading uid2meta from %s' % paths.meta_file)
@@ -146,6 +142,11 @@ else:
 def uid2patch(uid, cands1, 
               n_to_convert=None, 
               output_format=output_formats.iloc[0,:]):
+    """
+    Export patches given the image ID (uid) and the coordinates (cands1).
+    """
+    
+    # Load the image only if different from previous
     if (uid2patch.uid_prev is None) or \
             (uid != uid2patch.uid_prev):
         
@@ -181,40 +182,16 @@ def uid2patch(uid, cands1,
             break # DEBUG
     
     return n_converted
+# Initialize a function attribute.
 uid2patch.uid_prev = None
 
-def cand_scale2patch_file(cand, 
-                          output_format=output_formats.iloc[0,:]):
-    fmt = output_format
-#    print(cand) # DEBUG
-    is_pos = cand['is_pos']
-
-    diameter_mm, _ = output_format2size(fmt, is_pos)
-    spacing_mm = fmt['spacing_output_mm']
-        
-    patch_file = cand2patch_file(cand, 
-                                 diameter_mm = diameter_mm,
-                                 spacing_mm = spacing_mm)
-    return patch_file, diameter_mm, spacing_mm
-    
-def cand2patch_file(cand, diameter_mm=8*2.5*2, spacing_mm=0.5):
-    return os.path.join(
-            paths.patch_dir, 
-            'patch=' + cand['seriesuid']
-            + '+x=' + str(np.round(cand['coordX']*10)/10) 
-            + '+y=' + str(np.round(cand['coordY']*10)/10) 
-            + '+z=' + str(np.round(cand['coordZ']*10)/10)
-            + '+dia=' + str(np.round(diameter_mm))
-            + '+spa=' + str(np.round(spacing_mm*10)/10))
-    
 def cand2patch(cand, img_np=None, origin_mm=None, spacing_input_mm=None,
                is_annotation=True,
                output_format=output_formats.iloc[0,:]):
-#               max_radius=8, 
-#               spacing_output_mm=0.5,
-#               radius_out_per_in=2,
-#               radius_margin=8
-#               ):
+    """
+    Export a patch given a candidate coordinate.
+    """
+    
     from scipy.interpolate import interpn
     from pysy import zipPickle
     
@@ -263,9 +240,6 @@ def cand2patch(cand, img_np=None, origin_mm=None, spacing_input_mm=None,
                 * spacing_input_mm[dim] \
                 + origin_mm[dim]
 
-#        print(grid0_mm[dim]) # DEBUG
-#        print(temp)
-
         grid0_mm[dim] = temp
 
     grid_mm = np.transpose(delta_grid_mm + cand_mm)
@@ -275,11 +249,6 @@ def cand2patch(cand, img_np=None, origin_mm=None, spacing_input_mm=None,
     else:
         diameter_mm = -1
                          
-#    print(cand)
-#    print(grid0_mm)
-#    print(grid_mm.shape)
-#    print(grid_mm)
-    
     patch = interpn(grid0_mm, img_np, grid_mm, 
                     bounds_error=False,
                     fill_value=np.nan)
@@ -291,43 +260,43 @@ def cand2patch(cand, img_np=None, origin_mm=None, spacing_input_mm=None,
     print(np.min(patch))
     print(np.max(patch))
     
-    # axial
+    # Axial
     patch1 = patch[patch.shape[0]/2,:,:]
 #    plt.imshow(patch1, 
 #               cmap='gray')
 #    plt.show()
     
-    # Save preview
+    # Save a preview
     fout = pth + '_slice0.png'
     if not os.path.isfile(fout):
         Image.fromarray(patch1*255).convert('L').save(fout)
         print('Saved to %s' % fout)
 
-    # coronal
+    # Coronal
     patch1 = patch[:,patch.shape[1]/2,:]
 #    plt.imshow(patch1,
 #               cmap='gray')
 #    plt.show()
     
-    # Save preview
+    # Save a preview
     fout = pth + '_slice1.png'
     if not os.path.isfile(fout):
         Image.fromarray(patch1*255).convert('L').save(fout)
         print('Saved to %s' % fout)
     
-    # sagittal
+    # Sagittal
     patch1 = patch[:,:,patch.shape[2]/2]
 #    plt.imshow(patch1,
 #               cmap='gray')
 #    plt.show()
     
-    # Save preview
+    # Save a preview
     fout = pth + '_slice2.png'
     if not os.path.isfile(fout):
         Image.fromarray(patch1*255).convert('L').save(fout)
         print('Saved to %s' % fout)
     
-    # Save volume
+    # Save the volume after in-memory compression.
     fout = pth + '.zpkl'
     if not os.path.isfile(fout):
         zipPickle.save({'img':np.uint16(patch*(2**16-1)), 
@@ -340,29 +309,36 @@ def cand2patch(cand, img_np=None, origin_mm=None, spacing_input_mm=None,
         
     return 1
 
+def cand_scale2patch_file(cand, 
+                          output_format=output_formats.iloc[0,:]):
+    """
+    Name the patch file given the uid, coordinates, and the scale.
+    """
+    fmt = output_format
+    is_pos = cand['is_pos']
+
+    diameter_mm, _ = output_format2size(fmt, is_pos)
+    spacing_mm = fmt['spacing_output_mm']
+        
+    patch_file = cand2patch_file(cand, 
+                                 diameter_mm = diameter_mm,
+                                 spacing_mm = spacing_mm)
+    return patch_file, diameter_mm, spacing_mm
+    
+def cand2patch_file(cand, diameter_mm=8*2.5*2, spacing_mm=0.5):
+    return os.path.join(
+            paths.patch_dir, 
+            'patch=' + cand['seriesuid']
+            + '+x=' + str(np.round(cand['coordX']*10)/10) 
+            + '+y=' + str(np.round(cand['coordY']*10)/10) 
+            + '+z=' + str(np.round(cand['coordZ']*10)/10)
+            + '+dia=' + str(np.round(diameter_mm))
+            + '+spa=' + str(np.round(spacing_mm*10)/10))
+        
 #%% When run as a script
 def main():
-    #    #%% Test load_itk_image
-    #    img_file = uid2mhd_file(uid0[0])
-    #    img_np, origin_mm, spacing_input_mm = load_itk_image(img_file)
-    #    print(img_np.shape)
-    #    print(origin_mm)
-    #    print(spacing_input_mm)
-    #    
-    #    #%% uid2patch demo
-    #    uid2patch(uid0[0], cands_pos)
-    #        
-    #    #%% cand2patch demo
-    #    n_to_convert = 3
-    #    n_converted = 0
-    #    for row in range(len(cands_pos)):
-    #        cand = cands_pos.loc[row,:]
-    #        n_converted += cand2patch(cand)
-    #        if n_converted >= n_to_convert:
-    #            break
-    
-    #%% Convert
-    # Annotated (positive) candidates to patches
+    #%% Convert annotated candidates to patches.
+    # Give a margin because they will be augmented.
     n_uid_to_convert = np.inf
     n_uid_converted = 0
     n_uid = len(uids0)
@@ -383,10 +359,12 @@ def main():
         n_uid_converted += (converted > 0)
         if n_uid_converted >= n_uid_to_convert:
             break
-        
-    #%%
-    # Positive and Negative candidates in given subsets to patches
-    # Do not give margin since we won't augment the data
+    
+    #%% Convert positive and Negative candidates in given subsets to patches.
+    # Do not give a margin since we won't augment them.
+    # (There are enough negative candidates, so augmentation is not necessary.
+    #  Positive candidates overlap with annotated candidates,
+    #  so they are used not for training but for validation and test.)
     subset_incl = [0] # range(10)
     n_subset = len(subset_incl)
     n_uid_to_convert = np.inf
@@ -408,11 +386,6 @@ def main():
                 converted = uid2patch(
                          uid1, cands, 
                          output_format=fmt)
-#                         max_radius = fmt.radius_max,
-#                         spacing_output_mm = fmt.spacing_output_mm,
-#                         radius_out_per_in = fmt.radius_out_per_in,
-#                         radius_margin = 0,
-#                         n_to_convert = np.inf)
                 
             n_uid_converted += (converted > 0)
             if n_uid_converted >= n_uid_to_convert:
