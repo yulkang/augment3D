@@ -52,7 +52,7 @@ Augment3D also includes a classifier (`classify_patch`) using a deep 3D convolut
 3. Import images:
 
     ```python
-    # import_mhd takes a long time, potentially hours to a day or two.
+    # WARNING: takes a long time, potentially hours to a day or two.
     # It extracts all patches based on the annotations and saves them for fast retrieval.
     augment3D.import_mhd.main() 
     ```
@@ -65,3 +65,9 @@ Augment3D also includes a classifier (`classify_patch`) using a deep 3D convolut
     imgs_train, labels_train, imgs_valid, labels_valid = \
             ds.get_train_valid(batch_size)
     ```
+
+5. Train a deep 3D convolution network to classify the patches (work-in-progress).
+
+   ```python
+   import augment3D.classify_patch as classify
+   classify.main() # WARNING: takes a long time (hours to days depending on the setup).
