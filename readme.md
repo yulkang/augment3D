@@ -12,6 +12,8 @@ Augment3D achieves all augmentation including translation in-memory, by first sa
 
 Augment3D includes both a general-purpose module that augments 3D patches (`datasets`), and special-purpose modules that imports images and annotations of the LUNA (LUng Nodule Analysis) 2016 challenge (`gather_subsets`, `import_mhd`). The core algorithm of Augment3D can be useful for classification of many types of 3D images when there is a small region of interest with defined size and when the classification criterion is approximately invariant to rotation, flip, and translation. 
 
+Augment3D also includes a classifier (`classify_patch`) using a deep 3D convolution network based on TensorFlow. It is included as a template showing how to retrieve the data for training and validation. Its structure and hyperparameters are yet to be optimized.
+
 ## Requirements
 * Python 2.7 (not tested with other versions)
 * scipy
@@ -19,6 +21,7 @@ Augment3D includes both a general-purpose module that augments 3D patches (`data
 * PIL
 * SimpleITK
 * gzip
+* TensorFlow (for `classify_patch.py` only)
 
 ## Installation
 1. Download this code.
@@ -31,7 +34,7 @@ Augment3D includes both a general-purpose module that augments 3D patches (`data
    ....+-- LUNA # put annotations.csv and candidates.csv here
    ```
         
-3. Download data.
+3. Download the data.
     1. Go to https://grand-challenge.org/site/luna16/download/
     2. Download `annotations.csv` and `candidates.csv` to `Data/LUNA/`
     3. Download `subset*.zip` to a suitable folder, such as `ExternalHDD/LUNA/`
@@ -52,7 +55,7 @@ Augment3D includes both a general-purpose module that augments 3D patches (`data
     augment3D.import_mhd.main() # Takes a long time, potentially hours to days
     ```
     
-4. Retrieve the data using the module `datasets`. Positive samples are automatically augmented.
+4. Retrieve the data using the module `datasets`. Repeat as needed: you don't need to invoke any other command. Positive samples are automatically augmented. Samples are incrementally loaded from the disk without filling the memory.
 
     ```python
     import augment3D.datasets as ds
