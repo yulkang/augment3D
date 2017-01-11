@@ -1,3 +1,0 @@
-[submodule "matlab/lib/LIDCToolbox"]
-	path = matlab/lib/LIDCToolbox
-	url = https://github.com/yulkang/LIDCToolbox.git
