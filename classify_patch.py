@@ -12,19 +12,7 @@ Created on Sat Jun 11 17:09:43 2016
 from __future__ import print_function
 import numpy as np
 import tensorflow as tf
-from six.moves import cPickle as pickle
 from six.moves import range
-
-import pandas as pd
-import warnings
-import os
-from PIL import Image
-import matplotlib.pyplot as plt
-import time
-
-from pysy import zipPickle
-import compare_cand_vs_annot as annot
-import import_mhd as mhd
 
 import datasets
 
