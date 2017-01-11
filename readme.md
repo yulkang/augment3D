@@ -45,14 +45,16 @@ Augment3D also includes a classifier (`classify_patch`) using a deep 3D convolut
 2. Move all images into one folder and create a `.csv` containing the UID and the subset info:
 
     ```python
-    # separate from import_mhd (next step) because import_mhd takes a long time
+    # Separate from import_mhd (next step) because import_mhd takes a long time
     augment3D.gather_subsets.main()
     ```
     
 3. Import images:
 
     ```python
-    augment3D.import_mhd.main() # Takes a long time, potentially hours to days
+    # import_mhd takes a long time, potentially hours to a day or two.
+    # It extracts all patches based on the annotations and saves them for fast retrieval.
+    augment3D.import_mhd.main() 
     ```
     
 4. Retrieve the data using the module `datasets`. Repeat as needed: you don't need to invoke any other command. Positive samples are automatically augmented. Samples are incrementally loaded from the disk without filling the memory.
@@ -63,5 +65,3 @@ Augment3D also includes a classifier (`classify_patch`) using a deep 3D convolut
     imgs_train, labels_train, imgs_valid, labels_valid = \
             ds.get_train_valid(batch_size)
     ```
-
-
