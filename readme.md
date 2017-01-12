@@ -4,15 +4,17 @@ Augment 3D images of a focal lesion with 3D rotation, flip, and translation.
 ## Introduction
 When detecting a lesion from a medical image, it is often a good strategy to first identify parts of the image (“patches”) that likely contain the lesion and then classify the patches as containing the lesion (“positive”) or not. It can be especially effective when the lesion is relatively small compared to the whole image, as is the case for detecting lymph node metastases from thoraco-abdominal MRI scans or for detecting lung nodules from lung CT scans. 
 
-The challenge is that there are usually not enough positive examples. Augment3D addresses this challenge by augmenting the positive examples with 3D rotation, flip, and translation, in-memory. Because the image is 3D, permutation of axes alone gives 3! = 6 times the data. Combined with flip (2^3=8), it gives 48 times the original data.
+The challenge is that there are usually not enough positive examples. Augment3D addresses this challenge by augmenting the positive examples with 3D rotation, flip, and translation, _in-memory_. Because the image is 3D: 
+* Permutation of axes alone gives __3! = 6__ times the data. 
+* Combined with flip (__2^3=8__), it gives __48__ times the original data.
 
-In translation, Augment3D shifts the data with a vector sampled uniformly within the sphere of the annotated radius of the lesion. When the radius of the lesion is 5 voxels, for example, the method augments the data more than 200 times. 
+In translation, Augment3D shifts the data with a vector sampled uniformly within the sphere of the annotated radius of the lesion. When the radius of the lesion is 5 voxels, for example, the method augments the data more than __200__ times. 
 
 Augment3D achieves all augmentation including translation in-memory, by first saving the patches with an enough margin, and then slicing the patches on retrieval. When there is not enough memory to contain all candidate patches (especially negative patches, since there can be a vast number of them), Augment3D can load them incrementally from the disk after a set number of reuse.
 
-Augment3D includes both a general-purpose module that augments 3D patches (`datasets`), and special-purpose modules that imports images and annotations of the LUNA (LUng Nodule Analysis) 2016 challenge (`gather_subsets`, `import_mhd`). The core algorithm of Augment3D can be useful for classification of many types of 3D images when there is a small region of interest with defined size and when the classification criterion is approximately invariant to rotation, flip, and translation. 
+Augment3D includes both a general-purpose module that augments 3D patches (`datasets`), and special-purpose modules that imports images and annotations of the [LUNA (LUng Nodule Analysis) 2016 challenge](https://grand-challenge.org/site/luna16/home/) (`gather_subsets`, `import_mhd`). The core algorithm of Augment3D can be useful for classification of many types of 3D images when there is a small region of interest with defined size and when the classification criterion is approximately invariant to rotation, flip, and translation. 
 
-Augment3D also includes a classifier (`classify_patch`) using a deep 3D convolution network based on TensorFlow. It is included as a template showing how to retrieve the data for training and validation. Its structure and hyperparameters are yet to be optimized.
+Augment3D also includes a classifier (`classify_patch`) using a deep 3D convolution network based on [TensorFlow](https://www.tensorflow.org/). It is included as a template showing how to retrieve the data for training and validation. Its structure and hyperparameters are yet to be optimized.
 
 ## Requirements
 * Python 2.7 (not tested on other versions)
